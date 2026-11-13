@@ -194,10 +194,11 @@ function selfTest(win: BrowserWindow): void {
       log(`unread parsed: ${acc.unreadMap().get(a.id)} (expect 7)`)
       // Outlook-style synthetic notifications from a fake message list served locally.
       const page = `<!doctype html><title>(0) Mail - Outlook</title><div id="l">
+        <div role="option" data-convid="p1" aria-label="Przypięte Boss Pinned subject">pinned</div>
         <div role="option" data-convid="a1" aria-label="Old Sender Old subject">old</div></div>
         <script>window.addNew = () => { const d = document.createElement('div'); d.setAttribute('role','option');
           d.setAttribute('data-convid','n1'); d.setAttribute('aria-label','Nieprzeczytane Jan Kowalski Test subject Preview text');
-          document.getElementById('l').prepend(d); document.title = '(1) Mail - Outlook'; }</script>`
+          document.getElementById('l').insertBefore(d, document.querySelector('[data-convid=a1]')); document.title = '(1) Mail - Outlook'; }</script>`
       const srv = createServer((_q, r) => r.end(page)).listen(0, '127.0.0.1')
       await new Promise((r) => srv.once('listening', r))
       const port = (srv.address() as { port: number }).port

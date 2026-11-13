@@ -150,8 +150,10 @@ function outlookScan(): void {
     return
   }
   const ids = rows.map(rowId)
-  const firstSeen = ids.findIndex((id) => id && seenConv.has(id))
-  const fresh = rows.filter((r, i) => ids[i] && !seenConv.has(ids[i]) && (firstSeen < 0 || i < firstSeen))
+  // Pinned rows stay on top regardless of date, so they must not count as "known rows above".
+  const pinned = rows.map((r) => /(^|\s)(Przypięte|Pinned|Angeheftet|Épinglé|Anclado|Fissato)(\s|$)/i.test(r.getAttribute('aria-label') ?? ''))
+  const firstSeen = ids.findIndex((id, i) => id && !pinned[i] && seenConv.has(id))
+  const fresh = rows.filter((r, i) => ids[i] && !seenConv.has(ids[i]) && !pinned[i] && (firstSeen < 0 || i < firstSeen))
   const anyNew = rows.filter((_r, i) => ids[i] && !seenConv.has(ids[i]))
   // Folder switch / search / full re-render: most rows are new -> re-prime silently.
   if (anyNew.length > Math.max(5, rows.length / 2) || firstSeen < 0) {
@@ -167,7 +169,7 @@ function outlookScan(): void {
     if (!id) return
     const u = rowIsUnread(r)
     const was = unreadState.get(id)
-    if (was === false && u && i < 5 && !fresh.includes(r)) flipped.push(r)
+    if (was === false && u && i < 8 && !fresh.includes(r)) flipped.push(r)
     unreadState.set(id, u)
   })
   if (anyNew.length || flipped.length || Date.now() - lastScanLog > 30000) {
