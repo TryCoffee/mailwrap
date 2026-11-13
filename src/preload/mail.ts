@@ -168,11 +168,24 @@ function outlookScan(): void {
 // watch (Focused Inbox "Other") or arrives while the list is not rendered.
 let inboxUnread = -1
 let lastRowNotify = 0
+let dumped = false
+function dumpPane(): void {
+  if (dumped) return
+  const tree = Array.from(document.querySelectorAll<HTMLElement>('[role="treeitem"]')).slice(0, 12)
+  const tabs = Array.from(document.querySelectorAll<HTMLElement>('[role="tab"]')).slice(0, 12)
+  if (!tree.length && !tabs.length) return
+  dumped = true
+  const fmt = (e: HTMLElement): string =>
+    `<${e.tagName.toLowerCase()} aria-label="${e.getAttribute('aria-label') ?? ''}" title="${e.getAttribute('title') ?? ''}"> "${(e.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 60)}"`
+  ipcRenderer.send('debug', `pane treeitems: ${tree.map(fmt).join(' | ')}`)
+  ipcRenderer.send('debug', `pane tabs: ${tabs.map(fmt).join(' | ')}`)
+}
 function inboxCounter(): number {
+  dumpPane()
   const items = Array.from(document.querySelectorAll<HTMLElement>('[role="treeitem"]'))
   for (const it of items) {
-    const txt = (it.textContent ?? '').replace(/\s+/g, ' ').trim()
-    const m = txt.match(/^(Skrzynka odbiorcza|Inbox|Posteingang|Boîte de réception|Bandeja de entrada)\s*(\d+)?/i)
+    const txt = `${it.getAttribute('aria-label') ?? ''} ${it.getAttribute('title') ?? ''} ${it.textContent ?? ''}`.replace(/\s+/g, ' ').trim()
+    const m = txt.match(/(Skrzynka odbiorcza|Inbox|Posteingang|Boîte de réception|Bandeja de entrada)\D{0,40}?(\d+)?/i)
     if (m) return m[2] ? Number(m[2]) : 0
   }
   return -1
