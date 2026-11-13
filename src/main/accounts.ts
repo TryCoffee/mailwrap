@@ -100,6 +100,7 @@ export function ensureView(acct: Account): WebContentsView {
       v!.webContents.loadURL(url)
       return { action: 'deny' }
     }
+    if (process.env.MAILWRAP_DEBUG) console.log(`[mailwrap] external (window.open) from ${v!.webContents.getURL()} -> ${url}`)
     shell.openExternal(url)
     return { action: 'deny' }
   })
@@ -120,16 +121,13 @@ export function ensureView(acct: Account): WebContentsView {
     })
   })
   v.webContents.on('will-navigate', (e, url) => {
-    let hostName = ''
-    try {
-      hostName = new URL(url).hostname
-    } catch {
-      return
-    }
-    if (!INTERNAL_HOST_RE.test(hostName)) {
-      e.preventDefault()
-      shell.openExternal(url)
-    }
+    const h = hostOf(url)
+    if (!h || INTERNAL_HOST_RE.test(h)) return
+    // Never break a sign-in flow: while the view sits on an auth host, let any redirect through.
+    if (AUTH_HOST_RE.test(hostOf(v!.webContents.getURL()))) return
+    e.preventDefault()
+    if (process.env.MAILWRAP_DEBUG) console.log(`[mailwrap] external (navigate) from ${v!.webContents.getURL()} -> ${url}`)
+    shell.openExternal(url)
   })
   v.webContents.on('render-process-gone', () => v?.webContents.reload())
   v.webContents.loadURL(SERVICE_URL[acct.service])
