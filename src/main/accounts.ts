@@ -1,6 +1,6 @@
 import { BrowserWindow, WebContentsView, session, shell, app, Session } from 'electron'
 import { join } from 'node:path'
-import { INTERNAL_HOST_RE, SERVICE_URL, type Account } from '../shared'
+import { AUTH_HOST_RE, INTERNAL_HOST_RE, MAIL_HOST_RE, SERVICE_URL, type Account } from '../shared'
 import { partitionFor, store } from './store'
 import { SIDEBAR_WIDTH } from './window'
 
@@ -75,15 +75,17 @@ export function ensureView(acct: Account): WebContentsView {
       additionalArguments: [`--mailwrap-account=${acct.id}`]
     }
   })
-  v.webContents.setWindowOpenHandler(({ url }) => {
-    let hostName = ''
+  const hostOf = (url: string): string => {
     try {
-      hostName = new URL(url).hostname
+      return new URL(url).hostname
     } catch {
-      /* ignore */
+      return ''
     }
-    if (INTERNAL_HOST_RE.test(hostName)) {
-      // Auth popups (Google / Microsoft login) must stay inside the same session.
+  }
+  v.webContents.setWindowOpenHandler(({ url }) => {
+    const h = hostOf(url)
+    if (AUTH_HOST_RE.test(h)) {
+      // OAuth / account-chooser popups must stay inside the same session.
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {
@@ -92,8 +94,29 @@ export function ensureView(acct: Account): WebContentsView {
         }
       }
     }
+    if (INTERNAL_HOST_RE.test(h)) {
+      // e.g. sign-in flow finishing with window.open(mail.google.com): show it in this view.
+      v!.webContents.loadURL(url)
+      return { action: 'deny' }
+    }
     shell.openExternal(url)
     return { action: 'deny' }
+  })
+  // If an auth popup navigates to the mail app itself, move it back into the view and close the popup.
+  v.webContents.on('did-create-window', (popup) => {
+    popup.webContents.on('will-navigate', (e, url) => {
+      if (MAIL_HOST_RE.test(hostOf(url))) {
+        e.preventDefault()
+        v!.webContents.loadURL(url)
+        popup.close()
+      }
+    })
+    popup.webContents.on('did-navigate', (_e, url) => {
+      if (MAIL_HOST_RE.test(hostOf(url))) {
+        v!.webContents.loadURL(url)
+        popup.close()
+      }
+    })
   })
   v.webContents.on('will-navigate', (e, url) => {
     let hostName = ''

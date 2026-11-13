@@ -22,6 +22,13 @@ export const SERVICE_NAME: Record<Service, string> = {
 export const INTERNAL_HOST_RE =
   /(^|\.)(google\.com|googleusercontent\.com|gstatic\.com|live\.com|office\.com|office365\.com|microsoft\.com|microsoftonline\.com|outlook\.com|msauth\.net|msftauth\.net|live\.net|windows\.net|sharepoint\.com|office\.net)$/i
 
+/** Hosts allowed to open as a popup window (OAuth / account chooser flows). */
+export const AUTH_HOST_RE =
+  /(^|\.)(accounts\.google\.com|accounts\.youtube\.com|login\.microsoftonline\.com|login\.live\.com|login\.microsoft\.com|account\.microsoft\.com|account\.live\.com)$/i
+
+/** Hosts that are the mail apps themselves; must always render inside the account view. */
+export const MAIL_HOST_RE = /^(mail\.google\.com|outlook\.live\.com|outlook\.office\.com|outlook\.office365\.com)$/i
+
 export interface NotifyPayload {
   nid: number
   title: string
