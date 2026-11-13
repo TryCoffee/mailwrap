@@ -4,7 +4,7 @@ import { writeFile, unlink, mkdir } from 'node:fs/promises'
 import type { Service, Settings } from '../shared'
 import * as acc from './accounts'
 import { installNotifications } from './notifications'
-import { installHttpAuth } from './httpauth'
+import { installHttpAuth, forgetAllCreds } from './httpauth'
 import * as st from './store'
 import { createTray, updateTray } from './tray'
 import { createWindow, mainWindow, setQuitting, showWindow } from './window'
@@ -92,6 +92,7 @@ function main(): void {
     if (s.autostart !== undefined) await applyAutostart(s.autostart)
     return merged
   })
+  ipcMain.handle('auth:forget', () => forgetAllCreds())
   ipcMain.on('overlay', (_e, open: boolean) => acc.setOverlay(open))
   ipcMain.on('accounts:ctx', (_e, id: string, x: number, y: number) => {
     const a = st.store.get('accounts').find((x) => x.id === id)
@@ -196,7 +197,7 @@ function selfTest(win: BrowserWindow): void {
         app.on('browser-window-created', (_e, w) => {
           if (w.getTitle() === 'Sign in') {
             clearTimeout(t)
-            setTimeout(() => ipcMain.emit('auth:submit', {}, 'user', 'pass'), 800)
+            setTimeout(() => ipcMain.emit('auth:submit', {}, 'user', 'pass', false), 800)
             r(true)
           }
         })
@@ -205,7 +206,7 @@ function selfTest(win: BrowserWindow): void {
       log(`auth prompt shown: ${await promptSeen} (expect true)`)
       await new Promise<void>((r) => v.webContents.once('did-finish-load', () => r()))
       const body = await v.webContents.executeJavaScript('document.body.innerText')
-      log(`auth result: ${/authenticated.*true/.test(body)} (expect true)`)
+      log(`auth result: ${/authenticated.*true/.test(body)} (expect true) body=${body.slice(0, 120).replace(/\n/g, ' ')} url=${v.webContents.getURL()}`)
     } catch (e) {
       log(`ERROR ${e}`)
     }

@@ -53,6 +53,7 @@ export interface ShellApi {
   reloadAccount(id: string): Promise<void>
   contextMenu(id: string, x: number, y: number): void
   overlay(open: boolean): void
+  forgetAuth(): Promise<void>
   getSettings(): Promise<Settings>
   setSettings(s: Partial<Settings>): Promise<Settings>
   onAccounts(cb: (a: Account[]) => void): void

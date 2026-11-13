@@ -12,6 +12,7 @@ const api: ShellApi = {
   reloadAccount: (id) => ipcRenderer.invoke('accounts:reload', id),
   contextMenu: (id, x, y) => ipcRenderer.send('accounts:ctx', id, x, y),
   overlay: (open) => ipcRenderer.send('overlay', open),
+  forgetAuth: () => ipcRenderer.invoke('auth:forget'),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (s) => ipcRenderer.invoke('settings:set', s),
   onAccounts: (cb) => ipcRenderer.on('accounts', (_e, a) => cb(a)),

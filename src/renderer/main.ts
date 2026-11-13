@@ -85,6 +85,7 @@ document.getElementById('settings')!.onclick = async () => {
   ;(f.elements.namedItem('autostart') as HTMLInputElement).checked = s.autostart
   open($settingsDialog)
 }
+document.getElementById('forget-auth')!.onclick = () => api.forgetAuth()
 $settingsDialog.querySelector('form')!.addEventListener('change', (e) => {
   const t = e.target as HTMLInputElement
   api.setSettings({ [t.name]: t.checked })

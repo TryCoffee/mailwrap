@@ -7,6 +7,7 @@ interface Schema {
   activeId: string | null
   bounds: { x?: number; y?: number; width: number; height: number } | null
   settings: Settings
+  httpAuth: Record<string, { username: string; password: string }>
 }
 
 export const store = new Store<Schema>({
@@ -14,7 +15,8 @@ export const store = new Store<Schema>({
     accounts: [],
     activeId: null,
     bounds: null,
-    settings: { startMinimized: false, autostart: false }
+    settings: { startMinimized: false, autostart: false },
+    httpAuth: {}
   }
 })
 
