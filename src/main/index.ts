@@ -97,6 +97,7 @@ function main(): void {
     const menu = Menu.buildFromTemplate([
       { label: 'Reload', click: () => acc.reload(id) },
       { label: 'Rename…', click: () => broadcast('rename', id) },
+      { label: 'Developer tools', click: () => acc.openDevTools(id) },
       { type: 'separator' },
       { label: 'Move up', click: () => { st.moveAccount(id, -1); refresh() } },
       { label: 'Move down', click: () => { st.moveAccount(id, 1); refresh() } },

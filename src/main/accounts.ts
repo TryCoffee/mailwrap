@@ -130,6 +130,16 @@ export function ensureView(acct: Account): WebContentsView {
     shell.openExternal(url)
   })
   v.webContents.on('render-process-gone', () => v?.webContents.reload())
+  if (process.env.MAILWRAP_DEBUG) {
+    const wc = v.webContents
+    wc.on('did-navigate', (_e, url, code) => console.log(`[mailwrap] ${acct.label}: navigate ${code} ${url}`))
+    wc.on('did-navigate-in-page', (_e, url) => console.log(`[mailwrap] ${acct.label}: in-page ${url}`))
+    wc.on('did-fail-load', (_e, code, desc, url, isMain) => console.log(`[mailwrap] ${acct.label}: FAIL ${code} ${desc} ${url} main=${isMain}`))
+    wc.on('did-create-window', (w) => console.log(`[mailwrap] ${acct.label}: popup ${w.webContents.getURL()}`))
+    wc.on('console-message', (ev) => {
+      if (ev.level === 'error') console.log(`[mailwrap] ${acct.label}: console ${ev.message}`)
+    })
+  }
   v.webContents.loadURL(SERVICE_URL[acct.service])
   host?.contentView.addChildView(v)
   views.set(acct.id, v)
@@ -185,6 +195,10 @@ export function setOverlay(open: boolean): void {
   overlayOpen = open
   layout()
   if (!open && activeId) views.get(activeId)?.webContents.focus()
+}
+
+export function openDevTools(id: string): void {
+  views.get(id)?.webContents.openDevTools({ mode: 'detach' })
 }
 
 export function reload(id: string): void {
