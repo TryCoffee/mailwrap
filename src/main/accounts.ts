@@ -73,6 +73,7 @@ export function ensureView(acct: Account): WebContentsView {
       contextIsolation: true,
       sandbox: true,
       spellcheck: true,
+      backgroundThrottling: false,
       additionalArguments: [`--mailwrap-account=${acct.id}`]
     }
   })
