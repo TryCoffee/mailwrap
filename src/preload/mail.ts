@@ -133,6 +133,7 @@ function inNotifiableFolder(): boolean {
   return !/\/(sentitems|drafts|deleteditems|junkemail|archive|notes|outbox)\b/i.test(location.pathname)
 }
 let scanTimer: ReturnType<typeof setTimeout> | null = null
+let lastScanLog = 0
 function scheduleScan(): void {
   if (scanTimer) return
   scanTimer = setTimeout(() => {
@@ -169,6 +170,11 @@ function outlookScan(): void {
     if (was === false && u && i < 5 && !fresh.includes(r)) flipped.push(r)
     unreadState.set(id, u)
   })
+  if (anyNew.length || flipped.length || Date.now() - lastScanLog > 30000) {
+    lastScanLog = Date.now()
+    const top = rows.slice(0, 3).map((r, i) => `#${i} ${seenConv.has(ids[i]) ? 'seen' : 'NEW'} ${rowIsUnread(r) ? 'unread' : 'read'} "${(r.getAttribute('aria-label') ?? r.innerText).replace(/\s+/g, ' ').slice(0, 50)}"`)
+    ipcRenderer.send('debug', `scan rows=${rows.length} new=${anyNew.length} fresh=${fresh.length} flipped=${flipped.length} folderOk=${inNotifiableFolder()} top: ${top.join(' | ')}`)
+  }
   if (!inNotifiableFolder()) return
   for (const r of [...fresh, ...flipped]) {
     if (!rowIsUnread(r)) continue
