@@ -97,6 +97,7 @@ const isOutlook =
   /(^|\.)(outlook\.(live|office|office365)\.com|outlook\.cloud\.microsoft)$/i.test(location.hostname) ||
   process.argv.includes('--mailwrap-fake-outlook')
 const seenConv = new Set<string>()
+const unreadState = new Map<string, boolean>()
 const synthetic = new Map<number, string>() // nid -> convid
 let synthSeq = -1000000
 let primed = false
@@ -119,7 +120,12 @@ function rowText(el: HTMLElement): string {
   return (cleaned || el.innerText.replace(/\s+/g, ' ').trim()).slice(0, 240)
 }
 function primeSeen(): void {
-  for (const r of listRows()) if (rowId(r)) seenConv.add(rowId(r))
+  for (const r of listRows()) {
+    const id = rowId(r)
+    if (!id) continue
+    seenConv.add(id)
+    unreadState.set(id, rowIsUnread(r))
+  }
   primed = true
   ipcRenderer.send('debug', `outlook list primed with ${seenConv.size} rows`)
 }
@@ -153,8 +159,18 @@ function outlookScan(): void {
     return
   }
   for (const id of ids) if (id) seenConv.add(id)
+  // Known conversations that just turned unread (a reply arrived in an existing thread).
+  const flipped: HTMLElement[] = []
+  rows.forEach((r, i) => {
+    const id = ids[i]
+    if (!id) return
+    const u = rowIsUnread(r)
+    const was = unreadState.get(id)
+    if (was === false && u && i < 5 && !fresh.includes(r)) flipped.push(r)
+    unreadState.set(id, u)
+  })
   if (!inNotifiableFolder()) return
-  for (const r of fresh) {
+  for (const r of [...fresh, ...flipped]) {
     if (!rowIsUnread(r)) continue
     const nid = synthSeq++
     synthetic.set(nid, rowId(r))
@@ -184,9 +200,13 @@ function inboxCounter(): number {
   dumpPane()
   const items = Array.from(document.querySelectorAll<HTMLElement>('[role="treeitem"]'))
   for (const it of items) {
-    const txt = `${it.getAttribute('aria-label') ?? ''} ${it.getAttribute('title') ?? ''} ${it.textContent ?? ''}`.replace(/\s+/g, ' ').trim()
-    const m = txt.match(/(Skrzynka odbiorcza|Inbox|Posteingang|Boîte de réception|Bandeja de entrada)\D{0,40}?(\d+)?/i)
-    if (m) return m[2] ? Number(m[2]) : 0
+    const title = it.getAttribute('title') ?? ''
+    if (!/(Skrzynka odbiorcza|Inbox|Posteingang|Boîte de réception|Bandeja de entrada)/i.test(title)) continue
+    // "Elementy: Skrzynka odbiorcza – 8377 (nieprzeczytane: 5202)" / "Inbox – 8377 (unread: 5202)"
+    const m = title.match(/(nieprzeczytane|nieprzeczytanych|unread|ungelesen|non lus?|no le[ií]d[oa]s?)\D{0,3}(\d+)/i)
+    if (m) return Number(m[2])
+    const t = (it.textContent ?? '').match(/(\d+)\s*[—-]/)
+    return t ? Number(t[1]) : 0
   }
   return -1
 }
