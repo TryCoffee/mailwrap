@@ -105,14 +105,17 @@ const STATUS_WORD =
   /^(unread|nieprzeczytane|ungelesen|non lu|no le[ií]d[oa]s?|przypięte|pinned|ma załączniki|has attachments|przesłane dalej|forwarded|odpowiedziano|replied|flagged|oflagowane|⚠.*)$/i
 const TIME_LIKE = /^(\d{1,2}:\d{2}|\d{1,2}[./-]\d{1,2}([./-]\d{2,4})?|wczoraj|yesterday|[a-ząćęłńóśźż]{2,3}\.?)$/i
 
-/** Leaf texts of a message row in visual order: [status words…, sender, subject, time, preview…]. */
+const DATE_TITLE = /\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{4}-\d{2}-\d{2}/
+
+/** Sender and subject of a message row. Sender = element whose tooltip is an e-mail address;
+ *  time cell = element whose tooltip is a full date; subject = first remaining text after the sender. */
 function rowParts(el: HTMLElement): { sender: string; subject: string } {
-  const leaves: string[] = []
+  const leaves: { text: string; el: Element }[] = []
   const walk = (n: Element): void => {
     if (n.getAttribute('aria-hidden') === 'true') return
     if (!n.children.length) {
       const t = (n.textContent ?? '').replace(/\s+/g, ' ').trim()
-      if (t) leaves.push(t)
+      if (t) leaves.push({ text: t, el: n })
       return
     }
     for (const c of Array.from(n.children)) walk(c)
@@ -120,15 +123,26 @@ function rowParts(el: HTMLElement): { sender: string; subject: string } {
   walk(el)
   if (DEBUG) {
     const titles = Array.from(el.querySelectorAll<HTMLElement>('[title]')).map((e) => `${e.getAttribute('title')}=>"${(e.textContent ?? '').trim().slice(0, 40)}"`)
-    ipcRenderer.send('debug', `row leaves: ${JSON.stringify(leaves)} titles: ${titles.join(' | ')}`)
+    ipcRenderer.send('debug', `row leaves: ${JSON.stringify(leaves.map((l) => l.text))} titles: ${titles.join(' | ')}`)
   }
-  const meaningful = leaves.filter((t) => !STATUS_WORD.test(t) && !TIME_LIKE.test(t) && t.length > 1)
-  // Prefer an element whose title holds an e-mail address as the sender (OWA sets it on the name).
-  const titled = el.querySelector<HTMLElement>('[title*="@"]')
-  const senderFromTitle = titled ? (titled.textContent ?? '').replace(/\s+/g, ' ').trim() : ''
-  let sender = senderFromTitle || meaningful[0] || ''
-  const rest = meaningful.filter((t) => t !== sender)
-  const subject = rest[0] || ''
+  const titledAncestor = (n: Element, re: RegExp): boolean => {
+    for (let c: Element | null = n; c && c !== el; c = c.parentElement) {
+      const t = c.getAttribute('title')
+      if (t && re.test(t)) return true
+    }
+    return false
+  }
+  const senderEl = el.querySelector<HTMLElement>('[title*="@"]')
+  let sender = senderEl ? (senderEl.textContent ?? '').replace(/\s+/g, ' ').trim() : ''
+  const hasDateCell = leaves.some((l) => titledAncestor(l.el, DATE_TITLE))
+  const rest = leaves.filter((l) => {
+    if (STATUS_WORD.test(l.text) || l.text.length <= 1) return false
+    if (titledAncestor(l.el, /@/)) return false
+    if (hasDateCell ? titledAncestor(l.el, DATE_TITLE) : TIME_LIKE.test(l.text)) return false
+    return true
+  })
+  if (!sender) sender = rest.shift()?.text ?? ''
+  const subject = rest[0]?.text ?? ''
   if (!sender && !subject) {
     const label = (el.getAttribute('aria-label') ?? '').replace(/^(unread|nieprzeczytane)[\s,.:-]*/i, '').trim()
     sender = label.slice(0, 80)

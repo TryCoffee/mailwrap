@@ -198,7 +198,7 @@ function selfTest(win: BrowserWindow): void {
         <div role="option" data-convid="a1" aria-label="Old Sender Old subject">old</div></div>
         <script>window.addNew = () => { const d = document.createElement('div'); d.setAttribute('role','option');
           d.setAttribute('data-convid','n1'); d.setAttribute('aria-label','Nieprzeczytane Jan Kowalski Test subject Preview text');
-          d.innerHTML = '<span>Nieprzeczytane</span><span title="jan@example.com">Jan Kowalski</span><span>Test subject</span><span>00:19</span><span>Preview text</span>';
+          d.innerHTML = '<span>Nieprzeczytane</span><span title="jan@example.com">Jan Kowalski</span><span>00:47</span><span title="So, 14.11.2026 00:48">00:48</span><span>Preview text</span>';
           document.getElementById('l').insertBefore(d, document.querySelector('[data-convid=a1]')); document.title = '(1) Mail - Outlook'; }</script>`
       const srv = createServer((_q, r) => r.end(page)).listen(0, '127.0.0.1')
       await new Promise((r) => srv.once('listening', r))
@@ -208,7 +208,7 @@ function selfTest(win: BrowserWindow): void {
       await new Promise((r) => setTimeout(r, 3000)) // let primeSeen run
       const synth = new Promise<string>((r) => ipcMain.once('notify', (_e, p) => r(`${p.title} / ${p.body}`)))
       await v.webContents.executeJavaScript('addNew(); 1')
-      log(`outlook synthetic: ${await Promise.race([synth, new Promise<string>((r) => setTimeout(() => r('TIMEOUT'), 6000))])} (expect Jan Kowalski / Test subject)`)
+      log(`outlook synthetic: ${await Promise.race([synth, new Promise<string>((r) => setTimeout(() => r('TIMEOUT'), 6000))])} (expect Jan Kowalski / 00:47)`)
       srv.close()
       // HTTP auth prompt: answer it from here as the user would.
       const promptSeen = new Promise<boolean>((r) => {
