@@ -13,8 +13,14 @@ const $accounts = document.getElementById('accounts')!
 const $empty = document.getElementById('empty')!
 const $addDialog = document.getElementById('add-dialog') as HTMLDialogElement
 const $settingsDialog = document.getElementById('settings-dialog') as HTMLDialogElement
-const $ctx = document.getElementById('ctx')!
-let ctxTarget: string | null = null
+// Dialogs: the mail view is a native layer above this page, so hide it while a dialog is open.
+for (const d of document.querySelectorAll('dialog')) {
+  d.addEventListener('close', () => api.overlay(false))
+}
+const open = (d: HTMLDialogElement): void => {
+  api.overlay(true)
+  d.showModal()
+}
 const $renameDialog = document.getElementById('rename-dialog') as HTMLDialogElement
 let renameTarget: string | null = null
 $renameDialog.querySelector('.cancel')!.addEventListener('click', () => $renameDialog.close('cancel'))
@@ -34,11 +40,7 @@ function render(): void {
       const b = document.createElement('button')
       b.className = `acct ${a.service}${a.id === activeId ? ' active' : ''}`
       b.textContent = initials(a.label)
-      b.title = ''
-      const lbl = document.createElement('span')
-      lbl.className = 'lbl'
-      lbl.textContent = `${a.label}  (Ctrl+${i + 1})`
-      b.append(lbl)
+      b.title = `${a.label}  (Ctrl+${i + 1})`
       const n = unread.get(a.id) ?? 0
       if (n > 0) {
         const s = document.createElement('span')
@@ -49,10 +51,7 @@ function render(): void {
       b.onclick = () => api.setActive(a.id)
       b.oncontextmenu = (e) => {
         e.preventDefault()
-        ctxTarget = a.id
-        $ctx.hidden = false
-        $ctx.style.left = `${e.clientX}px`
-        $ctx.style.top = `${Math.min(e.clientY, window.innerHeight - $ctx.offsetHeight - 8)}px`
+        api.contextMenu(a.id, e.clientX, e.clientY)
       }
       return b
     })
@@ -60,31 +59,17 @@ function render(): void {
   $empty.hidden = accounts.length > 0
 }
 
-document.addEventListener('click', (e) => {
-  if (!$ctx.contains(e.target as Node)) $ctx.hidden = true
-})
-$ctx.addEventListener('click', async (e) => {
-  const act = (e.target as HTMLElement).dataset.act
-  $ctx.hidden = true
-  const id = ctxTarget
-  if (!act || !id) return
+api.onRename((id) => {
   const a = accounts.find((x) => x.id === id)
-  if (act === 'reload') api.reloadAccount(id)
-  else if (act === 'up') api.moveAccount(id, -1)
-  else if (act === 'down') api.moveAccount(id, 1)
-  else if (act === 'rename') {
-    const inp = $renameDialog.querySelector('[name=label]') as HTMLInputElement
-    inp.value = a?.label ?? ''
-    renameTarget = id
-    $renameDialog.showModal()
-  } else if (act === 'remove') {
-    if (confirm(`Remove account "${a?.label}"? Its login session will be deleted.`)) api.removeAccount(id)
-  }
+  const inp = $renameDialog.querySelector('[name=label]') as HTMLInputElement
+  inp.value = a?.label ?? ''
+  renameTarget = id
+  open($renameDialog)
 })
 
 document.getElementById('add')!.onclick = () => {
   ;($addDialog.querySelector('[name=label]') as HTMLInputElement).value = ''
-  $addDialog.showModal()
+  open($addDialog)
 }
 $addDialog.querySelector('.cancel')!.addEventListener('click', () => $addDialog.close('cancel'))
 $addDialog.addEventListener('close', () => {
@@ -98,7 +83,7 @@ document.getElementById('settings')!.onclick = async () => {
   const f = $settingsDialog.querySelector('form')!
   ;(f.elements.namedItem('startMinimized') as HTMLInputElement).checked = s.startMinimized
   ;(f.elements.namedItem('autostart') as HTMLInputElement).checked = s.autostart
-  $settingsDialog.showModal()
+  open($settingsDialog)
 }
 $settingsDialog.querySelector('form')!.addEventListener('change', (e) => {
   const t = e.target as HTMLInputElement

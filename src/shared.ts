@@ -51,10 +51,13 @@ export interface ShellApi {
   moveAccount(id: string, dir: -1 | 1): Promise<void>
   setActive(id: string): Promise<void>
   reloadAccount(id: string): Promise<void>
+  contextMenu(id: string, x: number, y: number): void
+  overlay(open: boolean): void
   getSettings(): Promise<Settings>
   setSettings(s: Partial<Settings>): Promise<Settings>
   onAccounts(cb: (a: Account[]) => void): void
   onActive(cb: (id: string | null) => void): void
   onUnread(cb: (id: string, n: number) => void): void
   onSidebarVisible(cb: (visible: boolean) => void): void
+  onRename(cb: (id: string) => void): void
 }

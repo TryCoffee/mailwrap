@@ -7,6 +7,7 @@ import { SIDEBAR_WIDTH } from './window'
 const views = new Map<string, WebContentsView>()
 const unread = new Map<string, number>()
 let activeId: string | null = null
+let overlayOpen = false
 let host: BrowserWindow | null = null
 
 export type Listener = () => void
@@ -56,7 +57,7 @@ function layout(): void {
   const [w, h] = host.getContentSize()
   for (const [id, v] of views) {
     v.setBounds({ x: SIDEBAR_WIDTH, y: 0, width: Math.max(0, w - SIDEBAR_WIDTH), height: h })
-    v.setVisible(id === activeId)
+    v.setVisible(id === activeId && !overlayOpen)
   }
 }
 
@@ -179,6 +180,13 @@ export function setUnread(id: string, n: number): void {
 
 export function unreadMap(): Map<string, number> {
   return unread
+}
+
+/** While a shell dialog is open the native view must get out of the way (it is stacked above the page). */
+export function setOverlay(open: boolean): void {
+  overlayOpen = open
+  layout()
+  if (!open && activeId) views.get(activeId)?.webContents.focus()
 }
 
 export function reload(id: string): void {

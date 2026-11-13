@@ -11,8 +11,6 @@ body { display:flex; }
 .acct.gmail { background:#c5221f; }
 .acct.outlook, .acct.outlook365 { background:#0f6cbd; }
 .acct .badge { position:absolute; right:-4px; top:-4px; min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:var(--badge); font-size:11px; line-height:18px; text-align:center; }
-.acct .lbl { position:absolute; left:100%; margin-left:10px; background:#000; padding:4px 8px; border-radius:6px; white-space:nowrap; display:none; pointer-events:none; z-index:5; font-weight:400; font-size:12px; }
-.acct:hover .lbl { display:block; }
 .icon-btn { width:40px; height:40px; border-radius:50%; border:none; background:#2b2d31; color:#3ba55c; font-size:20px; cursor:pointer; }
 .icon-btn:hover { background:#3ba55c; color:#fff; }
 #settings { color:#aaa; font-size:18px; }
@@ -29,8 +27,3 @@ dialog menu { display:flex; justify-content:flex-end; gap:8px; margin:16px 0 0; 
 dialog button { padding:6px 14px; border-radius:6px; border:none; background:var(--accent); color:#fff; cursor:pointer; }
 dialog button.cancel { background:#444; }
 .hint { color:#999; font-size:12px; margin:12px 0 0; }
-.menu { position:fixed; background:#2b2d31; border:1px solid #000; border-radius:8px; padding:4px; display:flex; flex-direction:column; min-width:160px; z-index:10; box-shadow:0 4px 16px rgba(0,0,0,.5); }
-.menu[hidden] { display:none; }
-.menu button { background:none; border:none; color:var(--fg); text-align:left; padding:6px 10px; border-radius:4px; cursor:pointer; }
-.menu button:hover { background:#3a3c41; }
-.menu button.danger { color:#ff6b6b; }

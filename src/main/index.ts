@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, globalShortcut } from 'electron'
+import { app, BrowserWindow, ipcMain, globalShortcut, Menu, dialog } from 'electron'
 import { join } from 'node:path'
 import { writeFile, unlink, mkdir } from 'node:fs/promises'
 import type { Service, Settings } from '../shared'
@@ -89,6 +89,38 @@ function main(): void {
     st.store.set('settings', merged)
     if (s.autostart !== undefined) await applyAutostart(s.autostart)
     return merged
+  })
+  ipcMain.on('overlay', (_e, open: boolean) => acc.setOverlay(open))
+  ipcMain.on('accounts:ctx', (_e, id: string, x: number, y: number) => {
+    const a = st.store.get('accounts').find((x) => x.id === id)
+    if (!a) return
+    const menu = Menu.buildFromTemplate([
+      { label: 'Reload', click: () => acc.reload(id) },
+      { label: 'Rename…', click: () => broadcast('rename', id) },
+      { type: 'separator' },
+      { label: 'Move up', click: () => { st.moveAccount(id, -1); refresh() } },
+      { label: 'Move down', click: () => { st.moveAccount(id, 1); refresh() } },
+      { type: 'separator' },
+      {
+        label: 'Remove account',
+        click: async () => {
+          const r = await dialog.showMessageBox(win, {
+            type: 'warning',
+            buttons: ['Remove', 'Cancel'],
+            defaultId: 1,
+            cancelId: 1,
+            message: `Remove account "${a.label}"?`,
+            detail: 'Its login session will be deleted.'
+          })
+          if (r.response === 0) {
+            acc.destroyView(id)
+            st.removeAccount(id)
+            refresh()
+          }
+        }
+      }
+    ])
+    menu.popup({ window: win, x, y })
   })
   ipcMain.on('unread', (e, n: number) => {
     const id = acc.accountForContents(e.sender.id)
