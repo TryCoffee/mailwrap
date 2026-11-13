@@ -10,13 +10,21 @@ export default defineConfig({
       rollupOptions: {
         input: {
           shell: resolve(__dirname, 'src/preload/shell.ts'),
-          mail: resolve(__dirname, 'src/preload/mail.ts')
+          mail: resolve(__dirname, 'src/preload/mail.ts'),
+          auth: resolve(__dirname, 'src/preload/auth.ts')
         }
       }
     }
   },
   renderer: {
     root: resolve(__dirname, 'src/renderer'),
-    build: { rollupOptions: { input: resolve(__dirname, 'src/renderer/index.html') } }
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'src/renderer/index.html'),
+          auth: resolve(__dirname, 'src/renderer/auth.html')
+        }
+      }
+    }
   }
 })

@@ -4,6 +4,7 @@ import { writeFile, unlink, mkdir } from 'node:fs/promises'
 import type { Service, Settings } from '../shared'
 import * as acc from './accounts'
 import { installNotifications } from './notifications'
+import { installHttpAuth } from './httpauth'
 import * as st from './store'
 import { createTray, updateTray } from './tray'
 import { createWindow, mainWindow, setQuitting, showWindow } from './window'
@@ -55,6 +56,7 @@ function main(): void {
   const win = createWindow(!hidden)
   createTray()
   installNotifications()
+  installHttpAuth()
   acc.onChange(refresh)
   acc.attach(win)
   win.webContents.on('did-finish-load', refresh)
@@ -182,6 +184,22 @@ function selfTest(win: BrowserWindow): void {
       await v.webContents.executeJavaScript('document.title = "Inbox (7) - test - Gmail"; 1')
       await new Promise((r) => setTimeout(r, 500))
       log(`unread parsed: ${acc.unreadMap().get(a.id)} (expect 7)`)
+      // HTTP auth prompt: answer it from here as the user would.
+      const promptSeen = new Promise<boolean>((r) => {
+        const t = setTimeout(() => r(false), 15000)
+        app.on('browser-window-created', (_e, w) => {
+          if (w.getTitle() === 'Sign in') {
+            clearTimeout(t)
+            setTimeout(() => ipcMain.emit('auth:submit', {}, 'user', 'pass'), 800)
+            r(true)
+          }
+        })
+      })
+      v.webContents.loadURL('https://httpbin.org/basic-auth/user/pass')
+      log(`auth prompt shown: ${await promptSeen} (expect true)`)
+      await new Promise<void>((r) => v.webContents.once('did-finish-load', () => r()))
+      const body = await v.webContents.executeJavaScript('document.body.innerText')
+      log(`auth result: ${/authenticated.*true/.test(body)} (expect true)`)
     } catch (e) {
       log(`ERROR ${e}`)
     }
