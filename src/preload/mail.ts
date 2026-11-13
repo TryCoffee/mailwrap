@@ -32,10 +32,17 @@ const shim = `(() => {
     }
     close() { live.delete(this._nid); }
     static get permission() { return 'granted'; }
-    static requestPermission(cb) { const p = Promise.resolve('granted'); if (cb) p.then(cb); return p; }
+    static requestPermission(cb) { window.postMessage({ __mailwrap: 'debug', msg: 'Notification.requestPermission called' }, '*'); const p = Promise.resolve('granted'); if (cb) p.then(cb); return p; }
     static get maxActions() { return 0; }
   }
   window.Notification = MailwrapNotification;
+  if (navigator.permissions && navigator.permissions.query) {
+    const q = navigator.permissions.query.bind(navigator.permissions);
+    navigator.permissions.query = (d) => q(d).then((r) => { if (d && d.name === 'notifications') window.postMessage({ __mailwrap: 'debug', msg: 'permissions.query(notifications) -> ' + r.state }, '*'); return r; });
+  }
+  if (navigator.serviceWorker) {
+    navigator.serviceWorker.ready.then((reg) => window.postMessage({ __mailwrap: 'debug', msg: 'service worker ready: ' + reg.scope }, '*')).catch(() => {});
+  }
   window.__mailwrapNotify = {
     click(nid) { const n = live.get(nid); if (!n) return; window.focus(); const ev = new Event('click'); n.onclick && n.onclick(ev); n.dispatchEvent(ev); live.delete(nid); },
     close(nid) { const n = live.get(nid); if (!n) return; const ev = new Event('close'); n.onclose && n.onclose(ev); n.dispatchEvent(ev); live.delete(nid); }
@@ -46,7 +53,13 @@ webFrame.executeJavaScript(shim).catch(() => undefined)
 
 window.addEventListener('message', (ev) => {
   const d = ev.data
-  if (ev.source !== window || !d || d.__mailwrap !== 'notify') return
+  if (ev.source !== window || !d) return
+  if (d.__mailwrap === 'debug') {
+    ipcRenderer.send('debug', d.msg)
+    return
+  }
+  if (d.__mailwrap !== 'notify') return
+  ipcRenderer.send('debug', `Notification created: "${d.title}" / ${d.body ?? ''}`)
   const p: NotifyPayload = { nid: d.nid, title: String(d.title ?? ''), body: d.body, icon: d.icon, tag: d.tag }
   ipcRenderer.send('notify', p)
 })
