@@ -19,8 +19,12 @@ linux:
   executableName: mailwrap
 rpm:
   depends: []
+  afterInstall: build/after-install.sh
+  afterRemove: build/after-remove.sh
 deb:
   depends: []
+  afterInstall: build/after-install.sh
+  afterRemove: build/after-remove.sh
 win:
   target: [nsis]
   icon: resources/icon.png
