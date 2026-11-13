@@ -32,7 +32,7 @@ const shim = `(() => {
     }
     close() { live.delete(this._nid); }
     static get permission() { return 'granted'; }
-    static requestPermission(cb) { window.postMessage({ __mailwrap: 'debug', msg: 'Notification.requestPermission called' }, '*'); const p = Promise.resolve('granted'); if (cb) p.then(cb); return p; }
+    static requestPermission(cb) { const p = Promise.resolve('granted'); if (cb) p.then(cb); return p; }
     static get maxActions() { return 0; }
   }
   window.Notification = MailwrapNotification;
@@ -40,17 +40,9 @@ const shim = `(() => {
   // page-side calls through the same shim.
   if (window.ServiceWorkerRegistration && ServiceWorkerRegistration.prototype.showNotification) {
     ServiceWorkerRegistration.prototype.showNotification = function (title, options) {
-      window.postMessage({ __mailwrap: 'debug', msg: 'showNotification via ServiceWorkerRegistration' }, '*');
       new MailwrapNotification(title, options);
       return Promise.resolve();
     };
-  }
-  if (navigator.permissions && navigator.permissions.query) {
-    const q = navigator.permissions.query.bind(navigator.permissions);
-    navigator.permissions.query = (d) => q(d).then((r) => { if (d && d.name === 'notifications') window.postMessage({ __mailwrap: 'debug', msg: 'permissions.query(notifications) -> ' + r.state }, '*'); return r; });
-  }
-  if (navigator.serviceWorker) {
-    navigator.serviceWorker.ready.then((reg) => window.postMessage({ __mailwrap: 'debug', msg: 'service worker ready: ' + reg.scope }, '*')).catch(() => {});
   }
   window.__mailwrapNotify = {
     click(nid) { const n = live.get(nid); if (!n) return; window.focus(); const ev = new Event('click'); n.onclick && n.onclick(ev); n.dispatchEvent(ev); live.delete(nid); },
@@ -63,12 +55,7 @@ webFrame.executeJavaScript(shim).catch(() => undefined)
 window.addEventListener('message', (ev) => {
   const d = ev.data
   if (ev.source !== window || !d) return
-  if (d.__mailwrap === 'debug') {
-    ipcRenderer.send('debug', d.msg)
-    return
-  }
   if (d.__mailwrap !== 'notify') return
-  ipcRenderer.send('debug', `Notification created: "${d.title}" / ${d.body ?? ''}`)
   const p: NotifyPayload = { nid: d.nid, title: String(d.title ?? ''), body: d.body, icon: d.icon, tag: d.tag }
   ipcRenderer.send('notify', p)
 })
@@ -84,7 +71,6 @@ function report(): void {
   const n = parseUnread(document.title)
   if (n !== last) {
     last = n
-    if (isOutlook) ipcRenderer.send('debug', `title now: ${document.title}`)
     ipcRenderer.send('unread', n)
   }
 }
@@ -114,10 +100,35 @@ function rowIsUnread(el: HTMLElement): boolean {
   // fallback: OWA marks unread rows with a bold subject / an "unread" class somewhere inside
   return !!el.querySelector('[class*="nread" i], [class*="Unread"]')
 }
-function rowText(el: HTMLElement): string {
-  const label = (el.getAttribute('aria-label') ?? '').trim()
-  const cleaned = label.replace(/^(unread|nieprzeczytane|ungelesen|non lu|no le[ií]d[oa]s?)[\s,.:-]*/i, '')
-  return (cleaned || el.innerText.replace(/\s+/g, ' ').trim()).slice(0, 240)
+const STATUS_WORD =
+  /^(unread|nieprzeczytane|ungelesen|non lu|no le[ií]d[oa]s?|przypięte|pinned|ma załączniki|has attachments|przesłane dalej|forwarded|odpowiedziano|replied|flagged|oflagowane|⚠.*)$/i
+const TIME_LIKE = /^(\d{1,2}:\d{2}|\d{1,2}[./-]\d{1,2}([./-]\d{2,4})?|wczoraj|yesterday|[a-ząćęłńóśźż]{2,3}\.?)$/i
+
+/** Leaf texts of a message row in visual order: [status words…, sender, subject, time, preview…]. */
+function rowParts(el: HTMLElement): { sender: string; subject: string } {
+  const leaves: string[] = []
+  const walk = (n: Element): void => {
+    if (n.getAttribute('aria-hidden') === 'true') return
+    if (!n.children.length) {
+      const t = (n.textContent ?? '').replace(/\s+/g, ' ').trim()
+      if (t) leaves.push(t)
+      return
+    }
+    for (const c of Array.from(n.children)) walk(c)
+  }
+  walk(el)
+  const meaningful = leaves.filter((t) => !STATUS_WORD.test(t) && !TIME_LIKE.test(t) && t.length > 1)
+  // Prefer an element whose title holds an e-mail address as the sender (OWA sets it on the name).
+  const titled = el.querySelector<HTMLElement>('[title*="@"]')
+  const senderFromTitle = titled ? (titled.textContent ?? '').replace(/\s+/g, ' ').trim() : ''
+  let sender = senderFromTitle || meaningful[0] || ''
+  const rest = meaningful.filter((t) => t !== sender)
+  const subject = rest[0] || ''
+  if (!sender && !subject) {
+    const label = (el.getAttribute('aria-label') ?? '').replace(/^(unread|nieprzeczytane)[\s,.:-]*/i, '').trim()
+    sender = label.slice(0, 80)
+  }
+  return { sender: sender.slice(0, 120), subject: subject.slice(0, 200) }
 }
 function primeSeen(): void {
   for (const r of listRows()) {
@@ -127,13 +138,11 @@ function primeSeen(): void {
     unreadState.set(id, rowIsUnread(r))
   }
   primed = true
-  ipcRenderer.send('debug', `outlook list primed with ${seenConv.size} rows`)
 }
 function inNotifiableFolder(): boolean {
   return !/\/(sentitems|drafts|deleteditems|junkemail|archive|notes|outbox)\b/i.test(location.pathname)
 }
 let scanTimer: ReturnType<typeof setTimeout> | null = null
-let lastScanLog = 0
 function scheduleScan(): void {
   if (scanTimer) return
   scanTimer = setTimeout(() => {
@@ -158,7 +167,6 @@ function outlookScan(): void {
   // Folder switch / search / full re-render: most rows are new -> re-prime silently.
   if (anyNew.length > Math.max(5, rows.length / 2) || firstSeen < 0) {
     for (const id of ids) if (id) seenConv.add(id)
-    ipcRenderer.send('debug', `outlook list re-rendered (${anyNew.length}/${rows.length} new), re-primed`)
     return
   }
   for (const id of ids) if (id) seenConv.add(id)
@@ -172,40 +180,21 @@ function outlookScan(): void {
     if (was === false && u && i < 8 && !fresh.includes(r)) flipped.push(r)
     unreadState.set(id, u)
   })
-  if (anyNew.length || flipped.length || Date.now() - lastScanLog > 30000) {
-    lastScanLog = Date.now()
-    const top = rows.slice(0, 3).map((r, i) => `#${i} ${seenConv.has(ids[i]) ? 'seen' : 'NEW'} ${rowIsUnread(r) ? 'unread' : 'read'} "${(r.getAttribute('aria-label') ?? r.innerText).replace(/\s+/g, ' ').slice(0, 50)}"`)
-    ipcRenderer.send('debug', `scan rows=${rows.length} new=${anyNew.length} fresh=${fresh.length} flipped=${flipped.length} folderOk=${inNotifiableFolder()} top: ${top.join(' | ')}`)
-  }
   if (!inNotifiableFolder()) return
   for (const r of [...fresh, ...flipped]) {
     if (!rowIsUnread(r)) continue
     const nid = synthSeq++
     synthetic.set(nid, rowId(r))
-    const text = rowText(r)
-    ipcRenderer.send('debug', `synthetic notification: ${text}`)
+    const { sender, subject } = rowParts(r)
     lastRowNotify = Date.now()
-    ipcRenderer.send('notify', { nid, title: 'New mail', body: text } as NotifyPayload)
+    ipcRenderer.send('notify', { nid, title: sender || 'New mail', body: subject, synthetic: true } as NotifyPayload)
   }
 }
 // Fallback: Inbox unread counter in the folder pane. Covers mail that lands in a tab we do not
 // watch (Focused Inbox "Other") or arrives while the list is not rendered.
 let inboxUnread = -1
 let lastRowNotify = 0
-let dumped = false
-function dumpPane(): void {
-  if (dumped) return
-  const tree = Array.from(document.querySelectorAll<HTMLElement>('[role="treeitem"]')).slice(0, 12)
-  const tabs = Array.from(document.querySelectorAll<HTMLElement>('[role="tab"]')).slice(0, 12)
-  if (!tree.length && !tabs.length) return
-  dumped = true
-  const fmt = (e: HTMLElement): string =>
-    `<${e.tagName.toLowerCase()} aria-label="${e.getAttribute('aria-label') ?? ''}" title="${e.getAttribute('title') ?? ''}"> "${(e.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 60)}"`
-  ipcRenderer.send('debug', `pane treeitems: ${tree.map(fmt).join(' | ')}`)
-  ipcRenderer.send('debug', `pane tabs: ${tabs.map(fmt).join(' | ')}`)
-}
 function inboxCounter(): number {
-  dumpPane()
   const items = Array.from(document.querySelectorAll<HTMLElement>('[role="treeitem"]'))
   for (const it of items) {
     const title = it.getAttribute('title') ?? ''
@@ -223,12 +212,10 @@ function checkInboxCounter(): void {
   if (n < 0) return
   if (inboxUnread < 0) {
     inboxUnread = n
-    ipcRenderer.send('debug', `inbox counter primed: ${n}`)
     return
   }
   if (n > inboxUnread) {
     const delta = n - inboxUnread
-    ipcRenderer.send('debug', `inbox counter ${inboxUnread} -> ${n}`)
     // If the row watcher just notified, assume it covered this increase.
     if (Date.now() - lastRowNotify > 5000) {
       const nid = synthSeq++

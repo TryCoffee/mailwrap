@@ -35,6 +35,8 @@ export interface NotifyPayload {
   body?: string
   icon?: string
   tag?: string
+  /** Produced by the app from the message list (Outlook), not by the page. */
+  synthetic?: boolean
 }
 
 export interface Settings {

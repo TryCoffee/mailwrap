@@ -11,6 +11,7 @@ export function installNotifications(): void {
     const label = store.get('accounts').find((a) => a.id === acctId)?.label
     const n = new Notification({
       title: p.title === 'New mail' && label ? `New mail – ${label}` : p.title,
+      subtitle: p.synthetic && label ? label : undefined,
       body: p.body ?? '',
       icon: p.icon?.startsWith('data:') ? nativeImage.createFromDataURL(p.icon) : undefined,
       silent: false

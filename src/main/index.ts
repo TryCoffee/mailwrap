@@ -127,12 +127,6 @@ function main(): void {
     ])
     menu.popup({ window: win, x, y })
   })
-  ipcMain.on('debug', (e, msg: string) => {
-    if (!process.env.MAILWRAP_DEBUG) return
-    const id = acc.accountForContents(e.sender.id)
-    const label = st.store.get('accounts').find((a) => a.id === id)?.label ?? '?'
-    console.log(`[mailwrap] ${label}: page ${msg}`)
-  })
   ipcMain.on('unread', (e, n: number) => {
     const id = acc.accountForContents(e.sender.id)
     if (id) acc.setUnread(id, n)
@@ -198,6 +192,7 @@ function selfTest(win: BrowserWindow): void {
         <div role="option" data-convid="a1" aria-label="Old Sender Old subject">old</div></div>
         <script>window.addNew = () => { const d = document.createElement('div'); d.setAttribute('role','option');
           d.setAttribute('data-convid','n1'); d.setAttribute('aria-label','Nieprzeczytane Jan Kowalski Test subject Preview text');
+          d.innerHTML = '<span>Nieprzeczytane</span><span title="jan@example.com">Jan Kowalski</span><span>Test subject</span><span>00:19</span><span>Preview text</span>';
           document.getElementById('l').insertBefore(d, document.querySelector('[data-convid=a1]')); document.title = '(1) Mail - Outlook'; }</script>`
       const srv = createServer((_q, r) => r.end(page)).listen(0, '127.0.0.1')
       await new Promise((r) => srv.once('listening', r))
@@ -207,7 +202,7 @@ function selfTest(win: BrowserWindow): void {
       await new Promise((r) => setTimeout(r, 3000)) // let primeSeen run
       const synth = new Promise<string>((r) => ipcMain.once('notify', (_e, p) => r(`${p.title} / ${p.body}`)))
       await v.webContents.executeJavaScript('addNew(); 1')
-      log(`outlook synthetic: ${await Promise.race([synth, new Promise<string>((r) => setTimeout(() => r('TIMEOUT'), 6000))])} (expect New mail / Jan Kowalski Test subject Preview text)`)
+      log(`outlook synthetic: ${await Promise.race([synth, new Promise<string>((r) => setTimeout(() => r('TIMEOUT'), 6000))])} (expect Jan Kowalski / Test subject)`)
       srv.close()
       // HTTP auth prompt: answer it from here as the user would.
       const promptSeen = new Promise<boolean>((r) => {
