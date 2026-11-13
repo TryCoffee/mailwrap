@@ -132,6 +132,7 @@ function scheduleScan(): void {
   scanTimer = setTimeout(() => {
     scanTimer = null
     outlookScan()
+    checkInboxCounter()
   }, 700)
 }
 function outlookScan(): void {
@@ -159,8 +160,41 @@ function outlookScan(): void {
     synthetic.set(nid, rowId(r))
     const text = rowText(r)
     ipcRenderer.send('debug', `synthetic notification: ${text}`)
+    lastRowNotify = Date.now()
     ipcRenderer.send('notify', { nid, title: 'New mail', body: text } as NotifyPayload)
   }
+}
+// Fallback: Inbox unread counter in the folder pane. Covers mail that lands in a tab we do not
+// watch (Focused Inbox "Other") or arrives while the list is not rendered.
+let inboxUnread = -1
+let lastRowNotify = 0
+function inboxCounter(): number {
+  const items = Array.from(document.querySelectorAll<HTMLElement>('[role="treeitem"]'))
+  for (const it of items) {
+    const txt = (it.textContent ?? '').replace(/\s+/g, ' ').trim()
+    const m = txt.match(/^(Skrzynka odbiorcza|Inbox|Posteingang|Boîte de réception|Bandeja de entrada)\s*(\d+)?/i)
+    if (m) return m[2] ? Number(m[2]) : 0
+  }
+  return -1
+}
+function checkInboxCounter(): void {
+  const n = inboxCounter()
+  if (n < 0) return
+  if (inboxUnread < 0) {
+    inboxUnread = n
+    ipcRenderer.send('debug', `inbox counter primed: ${n}`)
+    return
+  }
+  if (n > inboxUnread) {
+    const delta = n - inboxUnread
+    ipcRenderer.send('debug', `inbox counter ${inboxUnread} -> ${n}`)
+    // If the row watcher just notified, assume it covered this increase.
+    if (Date.now() - lastRowNotify > 5000) {
+      const nid = synthSeq++
+      ipcRenderer.send('notify', { nid, title: 'New mail', body: `${delta} new message${delta > 1 ? 's' : ''}` } as NotifyPayload)
+    }
+  }
+  inboxUnread = n
 }
 ipcRenderer.on('notify-click', (_e, nid: number) => {
   const conv = synthetic.get(nid)
@@ -176,7 +210,10 @@ window.addEventListener('DOMContentLoaded', () => {
     // then watch the DOM for rows inserted above the known ones.
     new MutationObserver(() => scheduleScan()).observe(document.documentElement, { childList: true, subtree: true })
     setTimeout(() => outlookScan(), 500)
-    setInterval(() => outlookScan(), 20000)
+    setInterval(() => {
+      outlookScan()
+      checkInboxCounter()
+    }, 20000)
   }
   report()
   const t = document.querySelector('title')
