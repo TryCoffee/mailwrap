@@ -36,6 +36,15 @@ const shim = `(() => {
     static get maxActions() { return 0; }
   }
   window.Notification = MailwrapNotification;
+  // Persistent notifications (registration.showNotification) are not displayed by Electron; route
+  // page-side calls through the same shim.
+  if (window.ServiceWorkerRegistration && ServiceWorkerRegistration.prototype.showNotification) {
+    ServiceWorkerRegistration.prototype.showNotification = function (title, options) {
+      window.postMessage({ __mailwrap: 'debug', msg: 'showNotification via ServiceWorkerRegistration' }, '*');
+      new MailwrapNotification(title, options);
+      return Promise.resolve();
+    };
+  }
   if (navigator.permissions && navigator.permissions.query) {
     const q = navigator.permissions.query.bind(navigator.permissions);
     navigator.permissions.query = (d) => q(d).then((r) => { if (d && d.name === 'notifications') window.postMessage({ __mailwrap: 'debug', msg: 'permissions.query(notifications) -> ' + r.state }, '*'); return r; });
