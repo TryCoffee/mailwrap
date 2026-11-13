@@ -1,0 +1,36 @@
+:root { --bg:#1e1f22; --fg:#ddd; --accent:#4c8bf5; --muted:#555; --badge:#e5484d; color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font: 13px system-ui, sans-serif; overflow:hidden; }
+body { display:flex; }
+#sidebar { width:64px; flex:0 0 64px; display:flex; flex-direction:column; align-items:center; padding:8px 0; gap:6px; border-right:1px solid #000; -webkit-app-region: no-drag; }
+#accounts { display:flex; flex-direction:column; gap:6px; width:100%; align-items:center; }
+.spacer { flex:1; }
+.acct { position:relative; width:48px; height:48px; border-radius:12px; border:none; background:#2b2d31; color:#fff; cursor:pointer; font-weight:600; font-size:16px; display:flex; align-items:center; justify-content:center; transition: border-radius .15s; }
+.acct:hover { border-radius:30%; }
+.acct.active { outline:2px solid var(--accent); }
+.acct.gmail { background:#c5221f; }
+.acct.outlook, .acct.outlook365 { background:#0f6cbd; }
+.acct .badge { position:absolute; right:-4px; top:-4px; min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:var(--badge); font-size:11px; line-height:18px; text-align:center; }
+.acct .lbl { position:absolute; left:100%; margin-left:10px; background:#000; padding:4px 8px; border-radius:6px; white-space:nowrap; display:none; pointer-events:none; z-index:5; font-weight:400; font-size:12px; }
+.acct:hover .lbl { display:block; }
+.icon-btn { width:40px; height:40px; border-radius:50%; border:none; background:#2b2d31; color:#3ba55c; font-size:20px; cursor:pointer; }
+.icon-btn:hover { background:#3ba55c; color:#fff; }
+#settings { color:#aaa; font-size:18px; }
+#settings:hover { background:#444; }
+main#empty { flex:1; display:flex; align-items:center; justify-content:center; text-align:center; color:#999; }
+main#empty[hidden] { display:none; }
+dialog { background:#2b2d31; color:var(--fg); border:1px solid #000; border-radius:10px; padding:20px 24px; min-width:320px; }
+dialog::backdrop { background:rgba(0,0,0,.5); }
+dialog h2 { margin:0 0 14px; font-size:16px; }
+dialog label { display:block; margin:10px 0; }
+dialog label.row { display:flex; align-items:center; gap:8px; }
+dialog input[type=text], dialog input:not([type]), dialog select { display:block; width:100%; margin-top:4px; padding:6px 8px; background:#1e1f22; color:var(--fg); border:1px solid #444; border-radius:6px; }
+dialog menu { display:flex; justify-content:flex-end; gap:8px; margin:16px 0 0; padding:0; }
+dialog button { padding:6px 14px; border-radius:6px; border:none; background:var(--accent); color:#fff; cursor:pointer; }
+dialog button.cancel { background:#444; }
+.hint { color:#999; font-size:12px; margin:12px 0 0; }
+.menu { position:fixed; background:#2b2d31; border:1px solid #000; border-radius:8px; padding:4px; display:flex; flex-direction:column; min-width:160px; z-index:10; box-shadow:0 4px 16px rgba(0,0,0,.5); }
+.menu[hidden] { display:none; }
+.menu button { background:none; border:none; color:var(--fg); text-align:left; padding:6px 10px; border-radius:4px; cursor:pointer; }
+.menu button:hover { background:#3a3c41; }
+.menu button.danger { color:#ff6b6b; }

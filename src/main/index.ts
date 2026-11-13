@@ -1,0 +1,169 @@
+import { app, BrowserWindow, ipcMain, globalShortcut } from 'electron'
+import { join } from 'node:path'
+import { writeFile, unlink, mkdir } from 'node:fs/promises'
+import type { Service, Settings } from '../shared'
+import * as acc from './accounts'
+import { installNotifications } from './notifications'
+import * as st from './store'
+import { createTray, updateTray } from './tray'
+import { createWindow, mainWindow, setQuitting, showWindow } from './window'
+
+app.setName('Mailwrap')
+if (process.env.MAILWRAP_SELFTEST) app.setPath('userData', join(app.getPath('temp'), 'mailwrap-selftest'))
+if (process.platform === 'linux') app.commandLine.appendSwitch('class', 'mailwrap')
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => showWindow())
+  app.whenReady().then(main)
+}
+
+function broadcast(channel: string, ...args: unknown[]): void {
+  mainWindow()?.webContents.send(channel, ...args)
+}
+
+function refresh(): void {
+  const accounts = st.store.get('accounts')
+  broadcast('accounts', accounts)
+  broadcast('active', acc.getActive())
+  for (const [id, n] of acc.unreadMap()) broadcast('unread', id, n)
+  updateTray(accounts, acc.unreadMap(), (id) => acc.setActive(id))
+}
+
+async function applyAutostart(enabled: boolean): Promise<void> {
+  if (process.platform !== 'linux') {
+    app.setLoginItemSettings({ openAtLogin: enabled, args: ['--hidden'] })
+    return
+  }
+  const dir = join(app.getPath('home'), '.config', 'autostart')
+  const file = join(dir, 'mailwrap.desktop')
+  if (!enabled) {
+    await unlink(file).catch(() => undefined)
+    return
+  }
+  const exec = process.env.APPIMAGE ?? process.execPath
+  await mkdir(dir, { recursive: true })
+  await writeFile(
+    file,
+    `[Desktop Entry]\nType=Application\nName=Mailwrap\nExec="${exec}" --hidden\nIcon=mailwrap\nX-GNOME-Autostart-enabled=true\n`
+  )
+}
+
+function main(): void {
+  const hidden = process.argv.includes('--hidden') || st.store.get('settings').startMinimized
+  const win = createWindow(!hidden)
+  createTray()
+  installNotifications()
+  acc.onChange(refresh)
+  acc.attach(win)
+  win.webContents.on('did-finish-load', refresh)
+
+  ipcMain.handle('accounts:list', () => st.store.get('accounts'))
+  ipcMain.handle('accounts:active', () => acc.getActive())
+  ipcMain.handle('accounts:add', (_e, service: Service, label: string) => {
+    const a = st.addAccount(service, label)
+    acc.ensureView(a)
+    acc.setActive(a.id)
+    refresh()
+    return a
+  })
+  ipcMain.handle('accounts:remove', (_e, id: string) => {
+    acc.destroyView(id)
+    st.removeAccount(id)
+    refresh()
+  })
+  ipcMain.handle('accounts:rename', (_e, id: string, label: string) => {
+    st.renameAccount(id, label)
+    refresh()
+  })
+  ipcMain.handle('accounts:move', (_e, id: string, dir: -1 | 1) => {
+    st.moveAccount(id, dir)
+    refresh()
+  })
+  ipcMain.handle('accounts:setActive', (_e, id: string) => acc.setActive(id))
+  ipcMain.handle('accounts:reload', (_e, id: string) => acc.reload(id))
+  ipcMain.handle('settings:get', () => st.store.get('settings'))
+  ipcMain.handle('settings:set', async (_e, s: Partial<Settings>) => {
+    const merged = { ...st.store.get('settings'), ...s }
+    st.store.set('settings', merged)
+    if (s.autostart !== undefined) await applyAutostart(s.autostart)
+    return merged
+  })
+  ipcMain.on('unread', (e, n: number) => {
+    const id = acc.accountForContents(e.sender.id)
+    if (id) acc.setUnread(id, n)
+  })
+
+  // Keyboard shortcuts scoped to the window (not global): handled via before-input-event on each view + shell.
+  const handleKey = (input: Electron.Input, e: Electron.Event): void => {
+    if (input.type !== 'keyDown') return
+    const ctrl = input.control || input.meta
+    if (!ctrl) return
+    if (/^[1-9]$/.test(input.key)) {
+      const a = st.store.get('accounts')[Number(input.key) - 1]
+      if (a) acc.setActive(a.id)
+      e.preventDefault()
+    } else if (input.key === 'Tab') {
+      acc.cycle(input.shift ? -1 : 1)
+      e.preventDefault()
+    } else if (input.key.toLowerCase() === 'q') {
+      setQuitting(true)
+      app.quit()
+    }
+  }
+  win.webContents.on('before-input-event', (e, input) => handleKey(input, e))
+  app.on('web-contents-created', (_e, wc) => {
+    wc.on('before-input-event', (e, input) => handleKey(input, e))
+  })
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow(true)
+    else showWindow()
+  })
+  app.on('before-quit', () => setQuitting(true))
+  app.on('will-quit', () => globalShortcut.unregisterAll())
+  app.on('window-all-closed', () => {
+    /* keep running in tray */
+  })
+
+  if (process.env.MAILWRAP_SELFTEST) selfTest(win)
+}
+
+/** MAILWRAP_SELFTEST=1: exercise show → close(X) → hidden → tray restore → quit, print results. */
+function selfTest(win: BrowserWindow): void {
+  const log = (m: string): void => console.log(`[selftest] ${m}`)
+  win.once('show', async () => {
+    try {
+      const a = st.addAccount('gmail', 'Test')
+      const v = acc.ensureView(a)
+      acc.setActive(a.id)
+      await new Promise<void>((r) => v.webContents.once('did-finish-load', () => r()))
+      log(`gmail view loaded: ${v.webContents.getURL()}`)
+      log(`ua: ${v.webContents.getUserAgent()} (expect Electron/ token present)`)
+      const perm = await v.webContents.executeJavaScript('Notification.permission + " " + Notification.name')
+      log(`page Notification: ${perm} (expect "granted MailwrapNotification")`)
+      const got = new Promise<string>((r) => ipcMain.once('notify', (_e, p) => r(p.title)))
+      await v.webContents.executeJavaScript('new Notification("Mailwrap self-test", {body: "notify path works"}); 1')
+      log(`notify IPC received: ${await Promise.race([got, new Promise<string>((r) => setTimeout(() => r('TIMEOUT'), 3000))])}`)
+      await v.webContents.executeJavaScript('document.title = "Inbox (7) - test - Gmail"; 1')
+      await new Promise((r) => setTimeout(r, 500))
+      log(`unread parsed: ${acc.unreadMap().get(a.id)} (expect 7)`)
+    } catch (e) {
+      log(`ERROR ${e}`)
+    }
+    setTimeout(() => {
+      log(`visible after start: ${win.isVisible()}`)
+      win.close() // simulates the X button
+      setTimeout(() => {
+        log(`visible after close(): ${win.isVisible()} (expect false), destroyed: ${win.isDestroyed()} (expect false)`)
+        showWindow()
+        setTimeout(() => {
+          log(`visible after tray restore: ${win.isVisible()} (expect true)`)
+          setQuitting(true)
+          app.quit()
+        }, 500)
+      }, 500)
+    }, 1500)
+  })
+}

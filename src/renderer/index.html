@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:" />
+<title>Mailwrap</title>
+<link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+<nav id="sidebar">
+  <div id="accounts"></div>
+  <div class="spacer"></div>
+  <button id="add" class="icon-btn" title="Add account">+</button>
+  <button id="settings" class="icon-btn" title="Settings">⚙</button>
+</nav>
+<main id="empty">
+  <div>
+    <h1>Mailwrap</h1>
+    <p>No accounts yet. Click <b>+</b> to add a Gmail or Outlook account.</p>
+  </div>
+</main>
+
+<dialog id="add-dialog">
+  <form method="dialog">
+    <h2>Add account</h2>
+    <label>Service
+      <select name="service">
+        <option value="gmail">Gmail</option>
+        <option value="outlook">Outlook.com (personal)</option>
+        <option value="outlook365">Outlook 365 (work / school)</option>
+      </select>
+    </label>
+    <label>Label <input name="label" placeholder="e.g. Work" required autocomplete="off" /></label>
+    <menu>
+      <button value="cancel" type="button" class="cancel">Cancel</button>
+      <button value="ok">Add</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="settings-dialog">
+  <form method="dialog">
+    <h2>Settings</h2>
+    <label class="row"><input type="checkbox" name="startMinimized" /> Start minimized to tray</label>
+    <label class="row"><input type="checkbox" name="autostart" /> Start on login</label>
+    <p class="hint">Notifications: enable "Desktop notifications" inside Gmail / Outlook settings.
+      Shortcuts: Ctrl+1…9 switch account, Ctrl+Tab cycle, Ctrl+Q quit.</p>
+    <menu><button value="ok">Close</button></menu>
+  </form>
+</dialog>
+
+<dialog id="rename-dialog">
+  <form method="dialog">
+    <h2>Rename account</h2>
+    <label>Label <input name="label" required autocomplete="off" /></label>
+    <menu>
+      <button value="cancel" type="button" class="cancel">Cancel</button>
+      <button value="ok">Rename</button>
+    </menu>
+  </form>
+</dialog>
+
+<div id="ctx" class="menu" hidden>
+  <button data-act="reload">Reload</button>
+  <button data-act="rename">Rename…</button>
+  <button data-act="up">Move up</button>
+  <button data-act="down">Move down</button>
+  <button data-act="remove" class="danger">Remove account</button>
+</div>
+
+<script type="module" src="./main.ts"></script>
+</body>
+</html>

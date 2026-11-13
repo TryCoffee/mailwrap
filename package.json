@@ -1,0 +1,34 @@
+{
+  "name": "mailwrap",
+  "version": "0.1.0",
+  "description": "Desktop wrapper for Gmail and Outlook with multi-account support",
+  "main": "out/main/index.js",
+  "author": {
+    "name": "Mateusz Ryczko",
+    "email": "mryczko@gmail.com"
+  },
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "dist:linux": "electron-vite build && electron-builder --linux",
+    "dist:win": "electron-vite build && electron-builder --win",
+    "dist:mac": "electron-vite build && electron-builder --mac"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "electron": "^45.3.2",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
+  },
+  "dependencies": {
+    "electron-store": "^12.0.0"
+  },
+  "homepage": "https://github.com/mattu77/mailwrap",
+  "desktopName": "mailwrap.desktop"
+}

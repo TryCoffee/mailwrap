@@ -1,0 +1,33 @@
+appId: fun.integra.mailwrap
+productName: Mailwrap
+directories:
+  output: dist
+  buildResources: resources
+files:
+  - out/**
+  - resources/**
+  - package.json
+linux:
+  syncDesktopName: true
+  target: [AppImage, rpm, deb]
+  category: Network;Email
+  icon: resources/icon.png
+  desktop:
+    entry:
+      StartupWMClass: mailwrap
+      Keywords: mail;gmail;outlook;email;
+  executableName: mailwrap
+rpm:
+  depends: []
+deb:
+  depends: []
+win:
+  target: [nsis]
+  icon: resources/icon.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+mac:
+  target: [dmg]
+  icon: resources/icon.png
+  category: public.app-category.productivity
