@@ -83,10 +83,9 @@ let last = -1
 function report(): void {
   const n = parseUnread(document.title)
   if (n !== last) {
-    const prev = last
     last = n
+    if (isOutlook) ipcRenderer.send('debug', `title now: ${document.title}`)
     ipcRenderer.send('unread', n)
-    if (isOutlook && prev >= 0 && n > prev) setTimeout(() => outlookScan(n - prev), 1500)
   }
 }
 
@@ -122,30 +121,45 @@ function rowText(el: HTMLElement): string {
 function primeSeen(): void {
   for (const r of listRows()) if (rowId(r)) seenConv.add(rowId(r))
   primed = true
+  ipcRenderer.send('debug', `outlook list primed with ${seenConv.size} rows`)
 }
-function outlookScan(delta: number): void {
+function inNotifiableFolder(): boolean {
+  return !/\/(sentitems|drafts|deleteditems|junkemail|archive|notes|outbox)\b/i.test(location.pathname)
+}
+let scanTimer: ReturnType<typeof setTimeout> | null = null
+function scheduleScan(): void {
+  if (scanTimer) return
+  scanTimer = setTimeout(() => {
+    scanTimer = null
+    outlookScan()
+  }, 700)
+}
+function outlookScan(): void {
+  const rows = listRows()
+  if (!rows.length) return
   if (!primed) {
     primeSeen()
     return
   }
-  const rows = listRows()
-  let fired = 0
-  for (const r of rows) {
-    const id = rowId(r)
-    if (!id || seenConv.has(id)) continue
-    seenConv.add(id)
-    if (!rowIsUnread(r) || fired >= delta) continue
-    fired++
-    const nid = synthSeq++
-    synthetic.set(nid, id)
-    const text = rowText(r)
-    const p: NotifyPayload = { nid, title: 'New mail', body: text }
-    ipcRenderer.send('debug', `synthetic notification: ${text}`)
-    ipcRenderer.send('notify', p)
+  const ids = rows.map(rowId)
+  const firstSeen = ids.findIndex((id) => id && seenConv.has(id))
+  const fresh = rows.filter((r, i) => ids[i] && !seenConv.has(ids[i]) && (firstSeen < 0 || i < firstSeen))
+  const anyNew = rows.filter((_r, i) => ids[i] && !seenConv.has(ids[i]))
+  // Folder switch / search / full re-render: most rows are new -> re-prime silently.
+  if (anyNew.length > Math.max(5, rows.length / 2) || firstSeen < 0) {
+    for (const id of ids) if (id) seenConv.add(id)
+    ipcRenderer.send('debug', `outlook list re-rendered (${anyNew.length}/${rows.length} new), re-primed`)
+    return
   }
-  if (fired === 0 && delta > 0) {
+  for (const id of ids) if (id) seenConv.add(id)
+  if (!inNotifiableFolder()) return
+  for (const r of fresh) {
+    if (!rowIsUnread(r)) continue
     const nid = synthSeq++
-    ipcRenderer.send('notify', { nid, title: 'New mail', body: `${delta} new message${delta > 1 ? 's' : ''}` })
+    synthetic.set(nid, rowId(r))
+    const text = rowText(r)
+    ipcRenderer.send('debug', `synthetic notification: ${text}`)
+    ipcRenderer.send('notify', { nid, title: 'New mail', body: text } as NotifyPayload)
   }
 }
 ipcRenderer.on('notify-click', (_e, nid: number) => {
@@ -158,14 +172,11 @@ ipcRenderer.on('notify-click', (_e, nid: number) => {
 
 window.addEventListener('DOMContentLoaded', () => {
   if (isOutlook) {
-    // Prime the seen-set once the list has rendered so existing mail never notifies.
-    const t = setInterval(() => {
-      if (listRows().length) {
-        primeSeen()
-        clearInterval(t)
-      }
-    }, 2000)
-    setTimeout(() => clearInterval(t), 120000)
+    // Prime the seen-set once the list has rendered so existing mail never notifies,
+    // then watch the DOM for rows inserted above the known ones.
+    new MutationObserver(() => scheduleScan()).observe(document.documentElement, { childList: true, subtree: true })
+    setTimeout(() => outlookScan(), 500)
+    setInterval(() => outlookScan(), 20000)
   }
   report()
   const t = document.querySelector('title')
