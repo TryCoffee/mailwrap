@@ -2,13 +2,15 @@ import { Notification, ipcMain, nativeImage } from 'electron'
 import type { NotifyPayload } from '../shared'
 import { accountForContents, setActive, viewFor } from './accounts'
 import { showWindow } from './window'
+import { store } from './store'
 
 export function installNotifications(): void {
   ipcMain.on('notify', (e, p: NotifyPayload) => {
     const acctId = accountForContents(e.sender.id)
     if (!acctId || !Notification.isSupported()) return
+    const label = store.get('accounts').find((a) => a.id === acctId)?.label
     const n = new Notification({
-      title: p.title,
+      title: p.title === 'New mail' && label ? `New mail – ${label}` : p.title,
       body: p.body ?? '',
       icon: p.icon?.startsWith('data:') ? nativeImage.createFromDataURL(p.icon) : undefined,
       silent: false

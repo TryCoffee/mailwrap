@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, globalShortcut, Menu, dialog } from 'electron'
 import { join } from 'node:path'
 import { writeFile, unlink, mkdir } from 'node:fs/promises'
+import { createServer } from 'node:http'
 import type { Service, Settings } from '../shared'
 import * as acc from './accounts'
 import { installNotifications } from './notifications'
@@ -191,6 +192,22 @@ function selfTest(win: BrowserWindow): void {
       await v.webContents.executeJavaScript('document.title = "Inbox (7) - test - Gmail"; 1')
       await new Promise((r) => setTimeout(r, 500))
       log(`unread parsed: ${acc.unreadMap().get(a.id)} (expect 7)`)
+      // Outlook-style synthetic notifications from a fake message list served locally.
+      const page = `<!doctype html><title>(0) Mail - Outlook</title><div id="l">
+        <div role="option" data-convid="a1" aria-label="Old Sender Old subject">old</div></div>
+        <script>window.addNew = () => { const d = document.createElement('div'); d.setAttribute('role','option');
+          d.setAttribute('data-convid','n1'); d.setAttribute('aria-label','Nieprzeczytane Jan Kowalski Test subject Preview text');
+          document.getElementById('l').prepend(d); document.title = '(1) Mail - Outlook'; }</script>`
+      const srv = createServer((_q, r) => r.end(page)).listen(0, '127.0.0.1')
+      await new Promise((r) => srv.once('listening', r))
+      const port = (srv.address() as { port: number }).port
+      v.webContents.loadURL(`http://127.0.0.1:${port}/`)
+      await new Promise<void>((r) => v.webContents.once('did-finish-load', () => r()))
+      await new Promise((r) => setTimeout(r, 3000)) // let primeSeen run
+      const synth = new Promise<string>((r) => ipcMain.once('notify', (_e, p) => r(`${p.title} / ${p.body}`)))
+      await v.webContents.executeJavaScript('addNew(); 1')
+      log(`outlook synthetic: ${await Promise.race([synth, new Promise<string>((r) => setTimeout(() => r('TIMEOUT'), 6000))])} (expect New mail / Jan Kowalski Test subject Preview text)`)
+      srv.close()
       // HTTP auth prompt: answer it from here as the user would.
       const promptSeen = new Promise<boolean>((r) => {
         const t = setTimeout(() => r(false), 15000)

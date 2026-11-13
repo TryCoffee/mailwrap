@@ -83,11 +83,90 @@ let last = -1
 function report(): void {
   const n = parseUnread(document.title)
   if (n !== last) {
+    const prev = last
     last = n
     ipcRenderer.send('unread', n)
+    if (isOutlook && prev >= 0 && n > prev) setTimeout(() => outlookScan(n - prev), 1500)
   }
 }
+
+// --- Outlook: synthesize notifications ------------------------------------
+// New Outlook delivers new-mail notifications through a Web Push service worker (sw_webpush.js),
+// which has no push service in Electron, so it never notifies. Instead, when the unread count
+// rises we read the newest unread rows from the message list and raise notifications ourselves.
+const isOutlook =
+  /(^|\.)(outlook\.(live|office|office365)\.com|outlook\.cloud\.microsoft)$/i.test(location.hostname) ||
+  process.argv.includes('--mailwrap-fake-outlook')
+const seenConv = new Set<string>()
+const synthetic = new Map<number, string>() // nid -> convid
+let synthSeq = -1000000
+let primed = false
+
+function listRows(): HTMLElement[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('[data-convid], [data-item-id]'))
+}
+function rowId(el: HTMLElement): string {
+  return el.getAttribute('data-convid') ?? el.getAttribute('data-item-id') ?? ''
+}
+function rowIsUnread(el: HTMLElement): boolean {
+  const label = (el.getAttribute('aria-label') ?? '').trim()
+  if (/^(unread|nieprzeczytane|ungelesen|non lu|no le[ií]d)/i.test(label)) return true
+  // fallback: OWA marks unread rows with a bold subject / an "unread" class somewhere inside
+  return !!el.querySelector('[class*="nread" i], [class*="Unread"]')
+}
+function rowText(el: HTMLElement): string {
+  const label = (el.getAttribute('aria-label') ?? '').trim()
+  const cleaned = label.replace(/^(unread|nieprzeczytane|ungelesen|non lu|no le[ií]d[oa]s?)[\s,.:-]*/i, '')
+  return (cleaned || el.innerText.replace(/\s+/g, ' ').trim()).slice(0, 240)
+}
+function primeSeen(): void {
+  for (const r of listRows()) if (rowId(r)) seenConv.add(rowId(r))
+  primed = true
+}
+function outlookScan(delta: number): void {
+  if (!primed) {
+    primeSeen()
+    return
+  }
+  const rows = listRows()
+  let fired = 0
+  for (const r of rows) {
+    const id = rowId(r)
+    if (!id || seenConv.has(id)) continue
+    seenConv.add(id)
+    if (!rowIsUnread(r) || fired >= delta) continue
+    fired++
+    const nid = synthSeq++
+    synthetic.set(nid, id)
+    const text = rowText(r)
+    const p: NotifyPayload = { nid, title: 'New mail', body: text }
+    ipcRenderer.send('debug', `synthetic notification: ${text}`)
+    ipcRenderer.send('notify', p)
+  }
+  if (fired === 0 && delta > 0) {
+    const nid = synthSeq++
+    ipcRenderer.send('notify', { nid, title: 'New mail', body: `${delta} new message${delta > 1 ? 's' : ''}` })
+  }
+}
+ipcRenderer.on('notify-click', (_e, nid: number) => {
+  const conv = synthetic.get(nid)
+  if (!conv) return
+  synthetic.delete(nid)
+  const el = listRows().find((r) => rowId(r) === conv)
+  el?.click()
+})
+
 window.addEventListener('DOMContentLoaded', () => {
+  if (isOutlook) {
+    // Prime the seen-set once the list has rendered so existing mail never notifies.
+    const t = setInterval(() => {
+      if (listRows().length) {
+        primeSeen()
+        clearInterval(t)
+      }
+    }, 2000)
+    setTimeout(() => clearInterval(t), 120000)
+  }
   report()
   const t = document.querySelector('title')
   if (t) new MutationObserver(report).observe(t, { childList: true, characterData: true, subtree: true })
