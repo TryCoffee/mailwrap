@@ -74,7 +74,7 @@ export function ensureView(acct: Account): WebContentsView {
       sandbox: true,
       spellcheck: true,
       backgroundThrottling: false,
-      additionalArguments: [`--mailwrap-account=${acct.id}`, ...(process.env.MAILWRAP_SELFTEST ? ['--mailwrap-fake-outlook'] : [])]
+      additionalArguments: [`--mailwrap-account=${acct.id}`, ...(process.env.MAILWRAP_SELFTEST ? ['--mailwrap-fake-outlook'] : []), ...(process.env.MAILWRAP_DEBUG ? ['--mailwrap-debug'] : [])]
     }
   })
   const hostOf = (url: string): string => {

@@ -82,6 +82,7 @@ function report(): void {
 const isOutlook =
   /(^|\.)(outlook\.(live|office|office365)\.com|outlook\.cloud\.microsoft)$/i.test(location.hostname) ||
   process.argv.includes('--mailwrap-fake-outlook')
+const DEBUG = process.argv.includes('--mailwrap-debug')
 const seenConv = new Set<string>()
 const unreadState = new Map<string, boolean>()
 const synthetic = new Map<number, string>() // nid -> convid
@@ -117,6 +118,10 @@ function rowParts(el: HTMLElement): { sender: string; subject: string } {
     for (const c of Array.from(n.children)) walk(c)
   }
   walk(el)
+  if (DEBUG) {
+    const titles = Array.from(el.querySelectorAll<HTMLElement>('[title]')).map((e) => `${e.getAttribute('title')}=>"${(e.textContent ?? '').trim().slice(0, 40)}"`)
+    ipcRenderer.send('debug', `row leaves: ${JSON.stringify(leaves)} titles: ${titles.join(' | ')}`)
+  }
   const meaningful = leaves.filter((t) => !STATUS_WORD.test(t) && !TIME_LIKE.test(t) && t.length > 1)
   // Prefer an element whose title holds an e-mail address as the sender (OWA sets it on the name).
   const titled = el.querySelector<HTMLElement>('[title*="@"]')

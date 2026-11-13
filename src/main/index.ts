@@ -127,6 +127,12 @@ function main(): void {
     ])
     menu.popup({ window: win, x, y })
   })
+  ipcMain.on('debug', (e, msg: string) => {
+    if (!process.env.MAILWRAP_DEBUG) return
+    const id = acc.accountForContents(e.sender.id)
+    const label = st.store.get('accounts').find((a) => a.id === id)?.label ?? '?'
+    console.log(`[mailwrap] ${label}: ${msg}`)
+  })
   ipcMain.on('unread', (e, n: number) => {
     const id = acc.accountForContents(e.sender.id)
     if (id) acc.setUnread(id, n)
