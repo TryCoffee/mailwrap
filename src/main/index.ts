@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, globalShortcut, Menu, dialog } from 'electron'
 import { join } from 'node:path'
 import { writeFile, unlink, mkdir } from 'node:fs/promises'
+import { appendFileSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { Service, Settings } from '../shared'
 import * as acc from './accounts'
@@ -176,7 +177,16 @@ function main(): void {
 
 /** MAILWRAP_SELFTEST=1: exercise show → close(X) → hidden → tray restore → quit, print results. */
 function selfTest(win: BrowserWindow): void {
-  const log = (m: string): void => console.log(`[selftest] ${m}`)
+  const logFile = join(app.getPath('userData'), 'selftest.log')
+  const log = (m: string): void => {
+    console.log(`[selftest] ${m}`)
+    appendFileSync(logFile, `[selftest] ${m}\n`)
+  }
+  try {
+    writeFileSync(logFile, '')
+  } catch {
+    /* ignore */
+  }
   win.once('show', async () => {
     try {
       const a = st.addAccount('gmail', 'Test')

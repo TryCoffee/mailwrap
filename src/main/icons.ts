@@ -51,18 +51,32 @@ function render(acct: Account): Promise<Buffer> {
       frame: false,
       webPreferences: { offscreen: true, sandbox: true, contextIsolation: true }
     })
+    let settled = false
     const done = (err?: Error, buf?: Buffer): void => {
+      if (settled) return
+      settled = true
       if (!w.isDestroyed()) w.destroy()
       err ? reject(err) : resolve(buf!)
     }
+    // Offscreen windows deliver frames through 'paint'; capturePage() can return an empty image
+    // on some platforms (seen on Windows), so prefer the painted frame and fall back to capture.
+    w.webContents.setFrameRate(10)
+    let loaded = false
+    w.webContents.on('paint', (_e, _dirty, image) => {
+      if (!loaded || image.isEmpty()) return
+      const { width, height } = image.getSize()
+      if (width >= SIZE && height >= SIZE) done(undefined, image.toPNG())
+    })
     w.webContents.once('did-finish-load', () => {
-      // One extra frame so fonts and layout are settled before capture.
+      loaded = true
+      w.webContents.invalidate()
       setTimeout(() => {
+        if (settled) return
         w.webContents
           .capturePage({ x: 0, y: 0, width: SIZE, height: SIZE })
-          .then((img) => done(undefined, img.toPNG()))
+          .then((img) => (img.isEmpty() ? done(new Error('empty capture')) : done(undefined, img.toPNG())))
           .catch((e) => done(e))
-      }, 150)
+      }, 2000)
     })
     w.webContents.once('did-fail-load', (_e, code, desc) => done(new Error(`${code} ${desc}`)))
     w.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
