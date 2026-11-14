@@ -3,17 +3,21 @@ import type { NotifyPayload } from '../shared'
 import { accountForContents, setActive, viewFor } from './accounts'
 import { showWindow } from './window'
 import { store } from './store'
+import { accountIcon } from './icons'
 
 export function installNotifications(): void {
-  ipcMain.on('notify', (e, p: NotifyPayload) => {
+  ipcMain.on('notify', async (e, p: NotifyPayload) => {
     const acctId = accountForContents(e.sender.id)
     if (!acctId || !Notification.isSupported()) return
-    const label = store.get('accounts').find((a) => a.id === acctId)?.label
+    const acct = store.get('accounts').find((a) => a.id === acctId)
+    const label = acct?.label
+    let icon = acct ? await accountIcon(acct) : nativeImage.createEmpty()
+    if (icon.isEmpty() && p.icon?.startsWith('data:')) icon = nativeImage.createFromDataURL(p.icon)
     const n = new Notification({
       title: p.title === 'New mail' && label ? `New mail – ${label}` : p.title,
       subtitle: p.synthetic && label ? label : undefined,
       body: p.body ?? '',
-      icon: p.icon?.startsWith('data:') ? nativeImage.createFromDataURL(p.icon) : undefined,
+      icon: icon.isEmpty() ? undefined : icon,
       silent: false
     })
     n.on('click', () => {
