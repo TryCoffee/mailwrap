@@ -13,7 +13,6 @@ import { createWindow, mainWindow, setQuitting, showWindow } from './window'
 
 app.setName('Mailwrap')
 if (process.platform === 'win32') app.setAppUserModelId('fun.integra.mailwrap')
-if (process.env.MAILWRAP_SELFTEST) app.setPath('userData', join(app.getPath('temp'), 'mailwrap-selftest'))
 if (process.platform === 'linux') app.commandLine.appendSwitch('class', 'mailwrap')
 
 if (!app.requestSingleInstanceLock()) {

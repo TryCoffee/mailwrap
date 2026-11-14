@@ -41,3 +41,7 @@ npm run dist:mac     # dmg (run on macOS)
 
 Start hidden: `mailwrap --hidden` (also what the "Start on login" option uses).
 Settings live in `~/.config/Mailwrap/config.json`.
+
+## License
+
+GPL-3.0-only. Copyright (C) 2026 Mateusz Ryczko. See [LICENSE](LICENSE).

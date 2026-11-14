@@ -7,7 +7,7 @@
     "name": "Mateusz Ryczko",
     "email": "mryczko@gmail.com"
   },
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "private": true,
   "scripts": {
     "dev": "electron-vite dev",

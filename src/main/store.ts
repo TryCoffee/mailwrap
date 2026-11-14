@@ -1,3 +1,4 @@
+import { app } from 'electron'
 import Store from 'electron-store'
 import { randomUUID } from 'node:crypto'
 import type { Account, Service, Settings } from '../shared'
@@ -9,6 +10,9 @@ interface Schema {
   settings: Settings
   httpAuth: Record<string, { username: string; password: string }>
 }
+
+// Must run before the store resolves its file: the self-test keeps ALL its data in a throwaway dir.
+if (process.env.MAILWRAP_SELFTEST) app.setPath('userData', `${app.getPath('temp')}/mailwrap-selftest`)
 
 export const store = new Store<Schema>({
   defaults: {
