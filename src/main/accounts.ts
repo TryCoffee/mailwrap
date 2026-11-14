@@ -139,8 +139,20 @@ export function ensureView(acct: Account): WebContentsView {
     popup.webContents.on('will-navigate', (e, url) => route(e, url))
     popup.webContents.on('did-navigate', (_e, url) => route(null, url))
   })
+  // The chain must start when a navigation *towards* a sign-in host begins: Microsoft's authorize
+  // endpoint answers with a 302 straight to the federated IdP, so the view never "lands" on it.
+  const noteAuth = (url: string): void => {
+    if (AUTH_HOST_RE.test(hostOf(url))) inAuthChain = true
+  }
+  v.webContents.on('did-start-navigation', (details) => {
+    if (details.isMainFrame) noteAuth(details.url)
+  })
+  v.webContents.on('did-redirect-navigation', (details) => {
+    if (details.isMainFrame) noteAuth(details.url)
+  })
   v.webContents.on('will-navigate', (e, url) => {
     const h = hostOf(url)
+    noteAuth(url)
     if (!h || inside(h)) return
     // Never break a sign-in flow: while the view sits on an auth host, let any redirect through
     // (federated IdPs such as a corporate ADFS live on arbitrary hosts).
