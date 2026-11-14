@@ -93,7 +93,10 @@ export function ensureView(acct: Account): WebContentsView {
       return ''
     }
   }
-  const onAuthHost = (): boolean => AUTH_HOST_RE.test(hostOf(v!.webContents.getURL()))
+  // Sign-in chain: entered when the view reaches a sign-in host, left when it is back on the mail app.
+  // Federated identity providers (e.g. a corporate ADFS) live on arbitrary hosts in between.
+  let inAuthChain = false
+  const onAuthHost = (): boolean => inAuthChain || AUTH_HOST_RE.test(hostOf(v!.webContents.getURL()))
   const external = (url: string, via: string): void => {
     if (process.env.MAILWRAP_DEBUG) console.log(`[mailwrap] external (${via}) from ${v!.webContents.getURL()} -> ${url}`)
     openExternal(url)
@@ -149,7 +152,9 @@ export function ensureView(acct: Account): WebContentsView {
   // resolved server-side). If the view ends up outside the allowed hosts, hand it over and go back.
   v.webContents.on('did-navigate', (_e, url) => {
     const h = hostOf(url)
-    if (!h || inside(h) || h === '127.0.0.1' || h === 'localhost') return
+    if (AUTH_HOST_RE.test(h)) inAuthChain = true
+    else if (MAIL_HOST_RE.test(h)) inAuthChain = false
+    if (!h || inside(h) || inAuthChain || h === '127.0.0.1' || h === 'localhost') return
     if (/^https?:/.test(url)) external(url, 'landed')
     if (v!.webContents.canGoBack()) v!.webContents.goBack()
     else v!.webContents.loadURL(SERVICE_URL[acct.service])
