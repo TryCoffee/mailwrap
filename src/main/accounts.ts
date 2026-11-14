@@ -1,6 +1,15 @@
 import { BrowserWindow, WebContentsView, session, shell, app, Session } from 'electron'
+
+/** Indirection so the self-test can observe hand-offs to the system browser. */
+export let openExternal: (url: string) => void = (url) => void shell.openExternal(url)
+export function setOpenExternal(fn: (url: string) => void): void {
+  openExternal = fn
+}
+/** Extra hosts treated as inside (self-test only). */
+export const extraInside = new Set<string>()
+const inside = (h: string): boolean => staysInside(h) || extraInside.has(h)
 import { join } from 'node:path'
-import { AUTH_HOST_RE, INTERNAL_HOST_RE, MAIL_HOST_RE, SERVICE_URL, type Account } from '../shared'
+import { AUTH_HOST_RE, MAIL_HOST_RE, SERVICE_URL, staysInside, type Account } from '../shared'
 import { partitionFor, store } from './store'
 import { SIDEBAR_WIDTH } from './window'
 
@@ -84,8 +93,14 @@ export function ensureView(acct: Account): WebContentsView {
       return ''
     }
   }
+  const onAuthHost = (): boolean => AUTH_HOST_RE.test(hostOf(v!.webContents.getURL()))
+  const external = (url: string, via: string): void => {
+    if (process.env.MAILWRAP_DEBUG) console.log(`[mailwrap] external (${via}) from ${v!.webContents.getURL()} -> ${url}`)
+    openExternal(url)
+  }
   v.webContents.setWindowOpenHandler(({ url }) => {
     const h = hostOf(url)
+    if (!h) return { action: 'deny' } // about:blank etc.
     if (AUTH_HOST_RE.test(h)) {
       // OAuth / account-chooser popups must stay inside the same session.
       return {
@@ -96,39 +111,48 @@ export function ensureView(acct: Account): WebContentsView {
         }
       }
     }
-    if (INTERNAL_HOST_RE.test(h)) {
+    if (MAIL_HOST_RE.test(h)) {
       // e.g. sign-in flow finishing with window.open(mail.google.com): show it in this view.
       v!.webContents.loadURL(url)
       return { action: 'deny' }
     }
-    if (process.env.MAILWRAP_DEBUG) console.log(`[mailwrap] external (window.open) from ${v!.webContents.getURL()} -> ${url}`)
-    shell.openExternal(url)
+    external(url, 'window.open')
     return { action: 'deny' }
   })
-  // If an auth popup navigates to the mail app itself, move it back into the view and close the popup.
+  // Auth popups: fold the mail app back into the view; anything else leaving the sign-in hosts goes external.
   v.webContents.on('did-create-window', (popup) => {
-    popup.webContents.on('will-navigate', (e, url) => {
-      if (MAIL_HOST_RE.test(hostOf(url))) {
-        e.preventDefault()
+    const route = (e: Electron.Event | null, url: string): void => {
+      const h = hostOf(url)
+      if (MAIL_HOST_RE.test(h)) {
+        e?.preventDefault()
         v!.webContents.loadURL(url)
         popup.close()
-      }
-    })
-    popup.webContents.on('did-navigate', (_e, url) => {
-      if (MAIL_HOST_RE.test(hostOf(url))) {
-        v!.webContents.loadURL(url)
+      } else if (h && !AUTH_HOST_RE.test(h) && !AUTH_HOST_RE.test(hostOf(popup.webContents.getURL()))) {
+        e?.preventDefault()
+        external(url, 'popup')
         popup.close()
       }
-    })
+    }
+    popup.webContents.on('will-navigate', (e, url) => route(e, url))
+    popup.webContents.on('did-navigate', (_e, url) => route(null, url))
   })
   v.webContents.on('will-navigate', (e, url) => {
     const h = hostOf(url)
-    if (!h || INTERNAL_HOST_RE.test(h)) return
-    // Never break a sign-in flow: while the view sits on an auth host, let any redirect through.
-    if (AUTH_HOST_RE.test(hostOf(v!.webContents.getURL()))) return
+    if (!h || inside(h)) return
+    // Never break a sign-in flow: while the view sits on an auth host, let any redirect through
+    // (federated IdPs such as a corporate ADFS live on arbitrary hosts).
+    if (onAuthHost()) return
     e.preventDefault()
-    if (process.env.MAILWRAP_DEBUG) console.log(`[mailwrap] external (navigate) from ${v!.webContents.getURL()} -> ${url}`)
-    shell.openExternal(url)
+    external(url, 'navigate')
+  })
+  // A redirect chain can land on a foreign host without a will-navigate we could veto (e.g. a mail link
+  // resolved server-side). If the view ends up outside the allowed hosts, hand it over and go back.
+  v.webContents.on('did-navigate', (_e, url) => {
+    const h = hostOf(url)
+    if (!h || inside(h) || h === '127.0.0.1' || h === 'localhost') return
+    if (/^https?:/.test(url)) external(url, 'landed')
+    if (v!.webContents.canGoBack()) v!.webContents.goBack()
+    else v!.webContents.loadURL(SERVICE_URL[acct.service])
   })
   v.webContents.on('render-process-gone', () => v?.webContents.reload())
   if (process.env.MAILWRAP_DEBUG) {

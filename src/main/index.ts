@@ -222,7 +222,17 @@ function selfTest(win: BrowserWindow): void {
       const synth = new Promise<string>((r) => ipcMain.once('notify', (_e, p) => r(`${p.title} / ${p.body}`)))
       await v.webContents.executeJavaScript('addNew(); 1')
       log(`outlook synthetic: ${await Promise.race([synth, new Promise<string>((r) => setTimeout(() => r('TIMEOUT'), 6000))])} (expect Jan Kowalski / 00:47)`)
+      // Navigation policy: leaving the mail app goes to the system browser, the view stays put.
+      const handed: string[] = []
+      acc.setOpenExternal((u) => handed.push(u))
+      const before = v.webContents.getURL()
+      await v.webContents.executeJavaScript('window.open("https://docs.google.com/document/d/x"); 1')
+      await v.webContents.executeJavaScript('location.href = "https://www.google.com/maps"; 1')
+      await new Promise((r) => setTimeout(r, 2000))
+      log(`external hand-offs: ${handed.length} (expect 2) -> ${handed.join(' , ')}`)
+      log(`view stayed: ${v.webContents.getURL() === before} (expect true)`)
       srv.close()
+      acc.extraInside.add('httpbin.org')
       // HTTP auth prompt: answer it from here as the user would.
       const promptSeen = new Promise<boolean>((r) => {
         const t = setTimeout(() => r(false), 15000)

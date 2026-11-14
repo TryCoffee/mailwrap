@@ -18,13 +18,19 @@ export const SERVICE_NAME: Record<Service, string> = {
   outlook365: 'Outlook 365'
 }
 
-/** Hosts that stay inside the account view; everything else opens in the system browser. */
-export const INTERNAL_HOST_RE =
-  /(^|\.)(google\.com|googleusercontent\.com|gstatic\.com|live\.com|office\.com|office365\.com|microsoft\.com|microsoftonline\.com|microsoftonline-p\.com|outlook\.com|msauth\.net|msftauth\.net|msidentity\.com|live\.net|windows\.net|sharepoint\.com|sharepointonline\.com|office\.net|cloud\.microsoft|msocdn\.com|azureedge\.net|microsoftpersonalcontent\.com|onedrive\.com|bing\.com)$/i
-
-/** Hosts allowed to open as a popup window (OAuth / account chooser flows). */
+/** Sign-in hosts: allowed as popups and as in-view navigation. */
 export const AUTH_HOST_RE =
-  /(^|\.)(accounts\.google\.com|accounts\.youtube\.com|login\.microsoftonline\.com|login\.live\.com|login\.microsoft\.com|account\.microsoft\.com|account\.live\.com)$/i
+  /(^|\.)(accounts\.google\.com|accounts\.youtube\.com|myaccount\.google\.com|login\.microsoftonline\.com|login\.live\.com|login\.microsoft\.com|account\.microsoft\.com|account\.live\.com|mysignins\.microsoft\.com|login\.windows\.net|device\.login\.microsoftonline\.com)$/i
+
+/** Attachment download / preview hosts that must stay inside (they are navigations, not links). */
+export const ATTACHMENT_HOST_RE =
+  /(^|\.)(mail-attachment\.googleusercontent\.com|attachments\.office\.net|attachment\.outlook\.live\.net|outlook\.live\.net|res\.cdn\.office\.net|res-1\.cdn\.office\.net)$/i
+
+/** Top-level navigation policy: only the mail app, sign-in and attachment hosts stay in the view.
+ *  Everything else (Maps, Docs, Drive, Word, Excel, OneDrive, arbitrary links) opens in the system browser. */
+export function staysInside(host: string): boolean {
+  return MAIL_HOST_RE.test(host) || AUTH_HOST_RE.test(host) || ATTACHMENT_HOST_RE.test(host)
+}
 
 /** Hosts that are the mail apps themselves; must always render inside the account view. */
 export const MAIL_HOST_RE = /^(mail\.google\.com|outlook\.live\.com|outlook\.office\.com|outlook\.office365\.com|outlook\.cloud\.microsoft)$/i
