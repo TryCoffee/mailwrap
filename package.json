@@ -14,7 +14,7 @@
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "dist:linux": "electron-vite build && electron-builder --linux",
+    "dist:linux": "electron-vite build && ZSTD_CLEVEL=19 ZSTD_NBTHREADS=0 electron-builder --linux",
     "dist:win": "electron-vite build && electron-builder --win",
     "dist:mac": "electron-vite build && electron-builder --mac"
   },

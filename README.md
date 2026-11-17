@@ -42,7 +42,7 @@ MAILWRAP_SELFTEST=1 npx electron out/main/index.js   # after `npm run build`: au
 ## Packaging
 
 ```sh
-npm run dist:linux   # AppImage, rpm, deb, pacman in dist/
+npm run dist:linux   # AppImage, rpm, deb, Arch .pkg.tar.zst in dist/
 npm run dist:win     # NSIS installer (run on Windows)
 npm run dist:mac     # dmg (run on macOS)
 ```
